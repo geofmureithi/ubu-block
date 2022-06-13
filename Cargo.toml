@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "3.1.18", features = ["derive"] }
+tokio = { version = "1", features = ["macros"]}
+sqlx = { version = "0.5", features = [ "runtime-tokio-rustls", "sqlite" ] }
+tabled = "0.7.0"
