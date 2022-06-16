@@ -1,5 +1,5 @@
 # ubu-block
-UBU Blockchain
+[WIP] UBU Blockchain
 
 ## Running
 ```sql
