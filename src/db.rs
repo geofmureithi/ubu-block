@@ -48,6 +48,18 @@ pub const SETUP: &str = r#"
     FOREIGN KEY ("party_id") REFERENCES "parties" ("id"),
     FOREIGN KEY ("voting_station") REFERENCES "stations" ("id")
   );
+
+  CREATE TABLE blockchain (
+    height				INTEGER NOT NULL UNIQUE,
+    sigkey_hash			VARCHAR NOT NULL,
+    hash				VARCHAR NOT NULL PRIMARY KEY,
+    hash_signature		VARCHAR NOT NULL,
+    prev_hash			VARCHAR NOT NULL,
+    prev_hash_signature	VARCHAR NOT NULL,
+    time_accepted		INTEGER NOT NULL,
+    version				INTEGER NOT NULL
+  );
+  CREATE INDEX blockchain_sigkey_hash ON blockchain(sigkey_hash);
   
   CREATE TABLE "results" (
     "id" int PRIMARY KEY,
@@ -73,6 +85,17 @@ pub const SETUP: &str = r#"
   INSERT INTO results VALUES(2, 022113056303301, 2, 99, "NGO1");
   INSERT INTO results VALUES(3, 045261130100402, 3, 172, "NGO2");
   INSERT INTO results VALUES(4, 022113056303301, 1, 56, "NGO1");
+
+  INSERT INTO blockchain (hash, height, prev_hash, sigkey_hash, hash_signature, prev_hash_signature, time_accepted, version) VALUES (
+    '9a0ff19183d1525a36de803047de4b73eb72506be8c81296eb463476a5c2d9e2',
+    0,
+    1000000000000000000000000000000000000000000000000000000000000001,
+    '1:a3c07ef6cbee246f231a61ff36bbcd8e8563723e3703eb345ecdd933d7709ae2',
+    '30460221008b8b3b3cfee2493ef58f2f6a1f1768b564f4c9e9a341ad42912cbbcf5c3ec82f022100fbcdfd0258fa1a5b073d18f688c2fb3d8f9a7c59204c6777f2bbf1faeb1eb1ed',
+    '3046022100db037ae6cb3c6e37cbc8ec592ba7eed2e6d18e6a3caedc4e2e81581eb97acb67022100d46d8ed27b5d78a8509b1eb8549c9b6b8f1c0a134c0c7af23bb93ab8cc842e2d',
+    '2022-05-06T10:38:50+02:00',
+    1);
+
 
   "#;
 
