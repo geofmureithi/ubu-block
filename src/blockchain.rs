@@ -1,10 +1,11 @@
-use bincode::serialize;
 use chrono::{DateTime, Utc};
-use sha3::{Digest, Sha3_256 as Sha256};
+
 use std::{
     collections::HashSet,
-    time::{self, SystemTime},
+    ops::{Deref, DerefMut},
 };
+
+use crate::db::Database;
 
 #[derive(Debug, Clone)]
 pub struct QueryBlockChain {
@@ -19,24 +20,27 @@ pub struct CandidateResult {
     pub votes: usize,
 }
 
-const VERSION: usize = 1;
+impl CandidateResult {
+    pub fn new(station_id: usize, candidate_id: usize, votes: usize) -> Self {
+        Self {
+            station_id,
+            candidate_id,
+            votes,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Block {
-    pub height: usize,
-    pub timestamp: DateTime<Utc>,
-    pub results: Vec<CandidateResult>,
     pub hash: String,
     pub hash_signature: String,
-    pub prev_hash: String,
-    pub prev_signature: String,
-    pub creator: String,
-    pub creator_pub_key: String,
-    pub version: usize,
+    pub inner: ResultBlock,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ResultBlock {
+    pub height: usize,
+    pub sigkey_hash: String,
     pub timestamp: DateTime<Utc>,
     pub results: Vec<CandidateResult>,
     pub prev_hash: String,
@@ -46,76 +50,85 @@ pub struct ResultBlock {
     pub version: usize,
 }
 
-impl Default for Block {
-    fn default() -> Self {
-        Block {
-            height: Default::default(),
+impl Block {
+    pub fn new(prev_hash: &str, results: Vec<CandidateResult>) -> Self {
+        let inner = ResultBlock {
+            height: 0,
             timestamp: Utc::now(),
-            results: Default::default(),
-            hash: Default::default(),
-            hash_signature: Default::default(),
-            prev_hash: Default::default(),
+            results,
+            prev_hash: prev_hash.to_string(),
+            sigkey_hash: Default::default(),
             prev_signature: Default::default(),
+
+            version: Default::default(),
             creator: Default::default(),
             creator_pub_key: Default::default(),
-            version: Default::default(),
+        };
+        Self {
+            hash: crate::crypto::hash_block(&inner),
+            hash_signature: Default::default(),
+            inner,
         }
+    }
+
+    pub fn genesis(
+        prev_hash: &str,
+        prev_signature: &str,
+        creator: &str,
+        creator_pub_key: &str,
+    ) -> Self {
+        let hash_signature = hex::decode("30460221008b8b3b3cfee2493ef58f2f6a1f1768b564f4c9e9a341ad42912cbbcf5c3ec82f022100fbcdfd0258fa1a5b073d18f688c2fb3d8f9a7c59204c6777f2bbf1faeb1eb1ed".to_string()).unwrap();
+        let inner = ResultBlock {
+            height: 0,
+            timestamp: Utc::now(),
+            results: vec![],
+            prev_hash: prev_hash.to_string(),
+            sigkey_hash: creator_pub_key.to_string(),
+            prev_signature: prev_signature.to_string(),
+            version: 1,
+            creator: creator.to_string(),
+            creator_pub_key: creator_pub_key.to_string(),
+        };
+        Self {
+            hash: crate::crypto::hash_block(&inner),
+            hash_signature: hex::encode(hash_signature),
+            inner,
+        }
+    }
+}
+
+impl Deref for Block {
+    type Target = ResultBlock;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct BlockChain {
-    pub chain: Vec<Block>,
-    pub nodes: HashSet<String>,
+    db: Database,
+    nodes: HashSet<String>,
 }
 
-impl Default for BlockChain {
-    fn default() -> Self {
-        BlockChain {
-            chain: vec![],
-            nodes: HashSet::new(),
-        }
+impl Deref for BlockChain {
+    type Target = Database;
+    fn deref(&self) -> &Self::Target {
+        &self.db
+    }
+}
+
+impl DerefMut for BlockChain {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.db
     }
 }
 
 impl BlockChain {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn new_block(&mut self, block: ResultBlock) -> Option<&Block> {
-        let hash = Self::hash(&block);
-        let block = Block {
-            height: self.chain.len() + 1,
-            timestamp: Utc::now(),
-            results: block.results,
-            prev_hash: block.prev_hash,
-            hash,
-            hash_signature: Default::default(),
-            prev_signature: block.prev_signature,
-            creator: block.creator,
-            creator_pub_key: block.creator_pub_key,
-            version: VERSION,
-        };
-
-        // append new block to chain
-        self.chain.push(block);
-
-        // return the last block
-        self.chain.last()
-    }
-
-    pub fn last_block(&self) -> Option<&Block> {
-        self.chain.last()
-    }
-
-    pub fn hash(block: &ResultBlock) -> String {
-        let block_bytes = serialize(block).unwrap();
-
-        let mut hasher = Sha256::new();
-        hasher.update(block_bytes);
-        let hashed_block = format!("{:x}", hasher.finalize());
-        hashed_block
+    pub fn new(db: Database) -> Self {
+        Self {
+            db,
+            nodes: Default::default(),
+        }
     }
 
     pub fn valid_chain<T: AsRef<[Block]>>(&self, chain: T) -> bool {
@@ -160,16 +173,21 @@ mod tests {
             candidate_id: 1,
             votes: 20,
         };
+        let prev_hash = "00000000000000000000000000000000000000000000000000".to_owned();
+        let key = crate::crypto::get_private_key(1);
+        let prev_signature = crate::crypto::sign_hash(&key, &prev_hash);
         let new_block = ResultBlock {
             timestamp: Utc::now(),
             results: vec![result],
-            prev_hash: "00000000000000000000000000000000000000000000000000".to_owned(),
-            prev_signature: Default::default(),
+            prev_hash,
+            prev_signature,
+            version: 1,
+            height: 1,
+            sigkey_hash: Default::default(),
             creator: Default::default(),
             creator_pub_key: Default::default(),
-            version: 1,
         };
-        let block = chain.new_block(new_block.clone()).unwrap();
+        let block = chain.add_block(new_block.clone()).unwrap();
 
         println!("CHAIN: {:?}", chain);
     }
