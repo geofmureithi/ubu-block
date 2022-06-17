@@ -149,7 +149,7 @@ thread 'main' panicked at 'Could not verify block, found 0e70cebe0ab3bd8c3606a08
 
 ```
 
-How about that? No opening servers and everything is public and sql friendly
+How about that? No `fungua servers` and everything is public and sql friendly
 
 ## Free Public Servers
 
