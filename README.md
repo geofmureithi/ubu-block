@@ -113,10 +113,50 @@ Running `query` again we get:
 
 ```
 +--------+--------------+----------+-----------+-------+-------+
-| county | constituency | ward | candidate | party | votes |
+| county | constituency |   ward   | candidate | party | votes |
 +--------+--------------+----------+-----------+-------+-------+
-| Kiambu | Juja | Kalimoni | Mwas | ODM | 71 |
+| Kiambu |     Juja     | Kalimoni |   Mwas    |  ODM  |  71   |
 +--------+--------------+----------+-----------+-------+-------+
-| Kiambu | Juja | Kalimoni | Omosh | PNU | 66 |
+| Kiambu |     Juja     | Kalimoni |   Omosh   |  PNU  |  66   |
 +--------+--------------+----------+-----------+-------+-------+
 ```
+
+Wow congrats to Omosh!
+
+![Omosh](https://kenyaleo.co.ke/wp-content/uploads/2021/06/1-221.jpg)
+
+Hold on, Hold on
+
+![Rao Petion](https://images.hivisasa.com/1200/7JhHhhZWMbFB_IMG_1503130067538.jpg)
+
+There is a petition, lets try validating our blockchain
+
+```
+cargo run validate
+
+thread 'main' panicked at 'Could not verify block, found 0e70cebe0ab3bd8c3606a08d26483d092534eea4ccdb7816fc2692aee5ed3109, block: Block {... CandidateResult { station_id: 22113056303301, candidate_id: 1, votes: 71 }]......', src/db.rs:189:17
+
+```
+
+How about that? No opening servers and everything is public and sql friendly
+
+## Roadmap
+
+v 0.3
+
+- [ ] Http API
+- [ ] Mobile and Web apps
+
+v 0.2
+
+- [ ] P2p - ability to add nodes
+- [ ] Fill regional data
+- [ ] Views to simplify quering
+- [ ] Setup triggers to `Before Insert` to prevent adding unmatching data
+
+v 0.1
+
+- [x] Clap
+- [x] Database, sqlite
+- [x] Blockchain
+- [ ] CI/CD
