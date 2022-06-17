@@ -52,8 +52,8 @@ Currently `ubu-block` has very limited dummy data, but this should change as soo
 For testing purposes, I used limited data from previous by elections. See `src/sql/main_db.sql`
 
 ```
-cargo run insert --station 022113056303301 --candidate 1 --votes 21
-cargo run insert --station 022113056303301 --candidate 2 --votes 66
+cargo run insert --station 022113056303301 --candidate 1 --votes 66
+cargo run insert --station 022113056303301 --candidate 2 --votes 21
 ```
 
 You should get:
@@ -104,15 +104,15 @@ You should get:
 +--------+--------------+----------+-----------+-------+-------+
 | county | constituency |   ward   | candidate | party | votes |
 +--------+--------------+----------+-----------+-------+-------+
-| Kiambu |     Juja     | Kalimoni |   Mwas    |  ODM  |  21   |
+| Kiambu |     Juja     | Kalimoni |   Omosh   |  ODM  |  21   |
 +--------+--------------+----------+-----------+-------+-------+
-| Kiambu |     Juja     | Kalimoni |   Omosh   |  PNU  |  66   |
+| Kiambu |     Juja     | Kalimoni |   Mwas    |  PNU  |  66   |
 +--------+--------------+----------+-----------+-------+-------+
 ```
 
-### Trying to steal the election from Omosh
+### Trying to steal the election for Omosh
 
-Since immutability is one of our main goal, lets try to edit votes for `Mwas` and see if we can get away with it
+Since immutability is one of our main goal, lets try to edit votes for `Omosh` and see if we can get away with it
 
 Open `blockchain.db` with your favourite sqlite editor and run a query that updates the results:
 
@@ -126,9 +126,9 @@ Running `query` again we get:
 +--------+--------------+----------+-----------+-------+-------+
 | county | constituency |   ward   | candidate | party | votes |
 +--------+--------------+----------+-----------+-------+-------+
-| Kiambu |     Juja     | Kalimoni |   Mwas    |  ODM  |  71   |
+| Kiambu |     Juja     | Kalimoni |   Omosh   |  ODM  |  71   |
 +--------+--------------+----------+-----------+-------+-------+
-| Kiambu |     Juja     | Kalimoni |   Omosh   |  PNU  |  66   |
+| Kiambu |     Juja     | Kalimoni |   Mwas    |  PNU  |  66   |
 +--------+--------------+----------+-----------+-------+-------+
 ```
 
@@ -151,6 +151,15 @@ thread 'main' panicked at 'Could not verify block, found 0e70cebe0ab3bd8c3606a08
 
 How about that? No opening servers and everything is public and sql friendly
 
+## Free Public Servers
+
+Below are the servers you are using for free, it may change along the time. If you are not close to one of these, your network may be slow.
+| Location | Vendor | Specification |
+| --------- | ------------- | ------------------ |
+| France | Vultr | 1 VCPU / 1GB RAM |
+
+**_NOTE:_** This will be accessible when `p2p` is ready (hopefully in the next release).
+
 ## Roadmap
 
 v 0.3
@@ -165,6 +174,7 @@ v 0.2
 - [ ] Views to simplify quering
 - [ ] Setup triggers to `Before Insert` to prevent adding unmatching data
 - [ ] Rigourous testing
+- [ ] Tabling of sql results
 
 v 0.1
 
