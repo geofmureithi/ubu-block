@@ -1,14 +1,26 @@
 # ubu-block
+
 Uchaguzi bila Ubaguzi Blockchain
 
-## Getting Started
+## Features
 
-This is a development guide to getting started, binaries coming soon
+1. Immutable: You can't make changes only append so no `fungua server` and other shenanigans.
+2. Distributed: No single point of data storage.
+3. Accessible: Runs on sqlite which is well supported in most platforms.
+4. Community driven: Dynamic number of signatories
+
+## Getting Started
 
 ```
 git clone <repo> ubu-block
 cd ubu-block
 ```
+
+If dont you want to do run binaries without installing rust:
+
+1. Get the latest binary from the releases page.
+2. Replace `cargo run` with `ubu-block`
+3. Download the relevant files see `Setup initial files`
 
 ### Setup initial files
 
@@ -152,10 +164,16 @@ v 0.2
 - [ ] Fill regional data
 - [ ] Views to simplify quering
 - [ ] Setup triggers to `Before Insert` to prevent adding unmatching data
+- [ ] Rigourous testing
 
 v 0.1
 
 - [x] Clap
 - [x] Database, sqlite
 - [x] Blockchain
-- [ ] CI/CD
+- [x] CI/CD
+
+## References
+
+[Do you need a blockchain?](https://eprint.iacr.org/2017/375.pdf)
+[Daisy](https://github.com/ivoras/daisy)
