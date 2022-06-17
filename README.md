@@ -1,5 +1,4 @@
 # ubu-block
-
 Uchaguzi bila Ubaguzi Blockchain
 
 ## Getting Started
