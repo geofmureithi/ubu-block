@@ -186,4 +186,5 @@ v 0.1
 ## References
 
 [Do you need a blockchain?](https://eprint.iacr.org/2017/375.pdf)
+
 [Daisy](https://github.com/ivoras/daisy)
