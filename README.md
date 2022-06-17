@@ -134,13 +134,14 @@ Running `query` again we get:
 
 Wow congrats to Omosh!
 
-
+[Photo by Ketut Subiyanto]( https://www.pexels.com/photo/excited-african-american-male-student-celebrating-successful-results-of-exams-4560142/)
 <img src="https://user-images.githubusercontent.com/42699812/174386545-799c9869-705d-4c67-b46c-76fca2283c49.jpg" width=70% height=60%>
 
 
 
 Hold on, Hold on
 
+[Photo by cottonbro]( https://www.pexels.com/photo/man-in-gray-suit-holding-files-and-documents-8371714/)
 <img src="https://user-images.githubusercontent.com/42699812/174367033-167be582-77d6-49ba-95d5-ff847616903f.jpg" width=50% height=50%>
 
 There is a petition, lets try validating our blockchain
