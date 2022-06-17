@@ -1,5 +1,4 @@
 # ubu-block
-
 Uchaguzi bila Ubaguzi Blockchain
 
 ## Getting Started
@@ -113,10 +112,10 @@ Running `query` again we get:
 
 ```
 +--------+--------------+----------+-----------+-------+-------+
-| county | constituency | ward | candidate | party | votes |
+| county | constituency |   ward   | candidate | party | votes |
 +--------+--------------+----------+-----------+-------+-------+
-| Kiambu | Juja | Kalimoni | Mwas | ODM | 71 |
+| Kiambu |     Juja     | Kalimoni |   Mwas    |  ODM  |  71   |
 +--------+--------------+----------+-----------+-------+-------+
-| Kiambu | Juja | Kalimoni | Omosh | PNU | 66 |
+| Kiambu |     Juja     | Kalimoni |   Omosh   |  PNU  |  66   |
 +--------+--------------+----------+-----------+-------+-------+
 ```
