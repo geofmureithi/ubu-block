@@ -15,7 +15,7 @@ pub fn get_private_key() -> SigningKey {
 pub fn sign_hash(key: &SigningKey, hash: &str) -> String {
     let hash = hex::decode(hash).unwrap();
     let signature: Signature = key.sign(&hash);
-    hex::encode(signature.to_vec())
+    hex::encode(serialize(&signature).unwrap())
 }
 
 pub fn hash_block(block: &ResultBlock) -> String {

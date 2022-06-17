@@ -1,11 +1,18 @@
+use bincode::deserialize;
 use chrono::{DateTime, Utc};
+use p256::ecdsa::{SigningKey, VerifyingKey};
 
 use std::{
     collections::HashSet,
     ops::{Deref, DerefMut},
 };
 
-use crate::db::Database;
+use crate::{
+    crypto::{sha256_digest, sign_hash},
+    db::{Database, PubKey, VERSION},
+};
+
+pub type BlockSigner = (SigningKey, VerifyingKey, PubKey);
 
 #[derive(Debug, Clone)]
 pub struct QueryBlockChain {
@@ -13,19 +20,19 @@ pub struct QueryBlockChain {
     pub length: usize,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct CandidateResult {
-    pub station_id: usize,
-    pub candidate_id: usize,
-    pub votes: usize,
+    pub station_id: i64,
+    pub candidate_id: i64,
+    pub votes: i64,
 }
 
 impl CandidateResult {
     pub fn new(station_id: usize, candidate_id: usize, votes: usize) -> Self {
         Self {
-            station_id,
-            candidate_id,
-            votes,
+            station_id: station_id as i64,
+            candidate_id: candidate_id as i64,
+            votes: votes as i64,
         }
     }
 }
@@ -40,60 +47,55 @@ pub struct Block {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ResultBlock {
     pub height: usize,
-    pub sigkey_hash: String,
+    pub signature_pub_key_hash: String,
     pub timestamp: DateTime<Utc>,
     pub results: Vec<CandidateResult>,
     pub prev_hash: String,
-    pub prev_signature: String,
+    pub prev_hash_signature: String,
     pub creator: String,
     pub creator_pub_key: String,
     pub version: usize,
 }
 
 impl Block {
-    pub fn new(prev_hash: &str, results: Vec<CandidateResult>) -> Self {
+    pub fn new(
+        signer: &BlockSigner,
+        prev_hash: &str,
+        results: Vec<CandidateResult>,
+        height: usize,
+    ) -> Self {
+        let prev_hash_signature = sign_hash(&signer.0, prev_hash);
+        let sigkey_hash = sha256_digest(&signer.1);
+        let creator = &signer.2.creator;
+
         let inner = ResultBlock {
-            height: 0,
+            height,
             timestamp: Utc::now(),
             results,
             prev_hash: prev_hash.to_string(),
-            sigkey_hash: Default::default(),
-            prev_signature: Default::default(),
-
-            version: Default::default(),
-            creator: Default::default(),
-            creator_pub_key: Default::default(),
+            signature_pub_key_hash: sigkey_hash.to_string(),
+            prev_hash_signature,
+            version: VERSION,
+            creator: creator.to_string(),
+            creator_pub_key: sha256_digest(&signer.1),
         };
+        let hash = crate::crypto::hash_block(&inner);
+        let hash_signature = sign_hash(&signer.0, &hash);
         Self {
-            hash: crate::crypto::hash_block(&inner),
-            hash_signature: Default::default(),
+            hash,
+            hash_signature,
             inner,
         }
     }
 
-    pub fn genesis(
-        prev_hash: &str,
-        prev_signature: &str,
-        creator: &str,
-        creator_pub_key: &str,
-    ) -> Self {
-        let hash_signature = hex::decode("30460221008b8b3b3cfee2493ef58f2f6a1f1768b564f4c9e9a341ad42912cbbcf5c3ec82f022100fbcdfd0258fa1a5b073d18f688c2fb3d8f9a7c59204c6777f2bbf1faeb1eb1ed".to_string()).unwrap();
-        let inner = ResultBlock {
-            height: 0,
-            timestamp: Utc::now(),
-            results: vec![],
-            prev_hash: prev_hash.to_string(),
-            sigkey_hash: creator_pub_key.to_string(),
-            prev_signature: prev_signature.to_string(),
-            version: 1,
-            creator: creator.to_string(),
-            creator_pub_key: creator_pub_key.to_string(),
-        };
-        Self {
-            hash: crate::crypto::hash_block(&inner),
-            hash_signature: hex::encode(hash_signature),
-            inner,
-        }
+    pub(crate) fn set_results(&mut self, results: Vec<CandidateResult>) {
+        self.inner.results = results;
+    }
+
+    pub(crate) fn set_pub_key(&mut self, pub_key: PubKey) {
+        self.inner.creator = pub_key.creator;
+        let public_key: VerifyingKey = deserialize(&pub_key.bytes).unwrap();
+        self.inner.creator_pub_key = sha256_digest(&public_key);
     }
 }
 
@@ -107,6 +109,7 @@ impl Deref for Block {
 #[derive(Debug, Clone)]
 pub struct BlockChain {
     db: Database,
+    #[allow(dead_code)]
     nodes: HashSet<String>,
 }
 
@@ -129,31 +132,6 @@ impl BlockChain {
             db,
             nodes: Default::default(),
         }
-    }
-
-    pub fn valid_chain<T: AsRef<[Block]>>(&self, chain: T) -> bool {
-        let mut block_peek = chain.as_ref().iter().peekable();
-        while let Some(block) = block_peek.next() {
-            let next_block = block_peek.peek();
-            if next_block.is_none() {
-                break;
-            }
-            // caculate the hash value of each block, and valid it with the current nodes'
-            // let to_be_verified = Self::hash(&block);
-
-            // if to_be_verified
-            //     .map(|v| next_block.unwrap().prev_hash.ne(&v))
-            //     .is_err()
-            // {
-            //     return false;
-            // }
-
-            // if !Self::valid_proof(block.proof, next_block.unwrap().proof) {
-            //     return false;
-            // }
-        }
-
-        true
     }
 }
 
@@ -180,10 +158,10 @@ mod tests {
             timestamp: Utc::now(),
             results: vec![result],
             prev_hash,
-            prev_signature,
+            prev_hash_signature: prev_signature,
             version: 1,
             height: 1,
-            sigkey_hash: Default::default(),
+            signature_pub_key_hash: Default::default(),
             creator: Default::default(),
             creator_pub_key: Default::default(),
         };
