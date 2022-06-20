@@ -16,7 +16,7 @@ git clone <repo> ubu-block
 cd ubu-block
 ```
 
-If dont you want to do run binaries without installing rust:
+If you want to run binaries without installing rust:
 
 1. Get the latest binary from the releases page.
 2. Replace `cargo run` with `ubu-block`
@@ -134,11 +134,15 @@ Running `query` again we get:
 
 Wow congrats to Omosh!
 
-![Omosh](https://kenyaleo.co.ke/wp-content/uploads/2021/06/1-221.jpg)
+
+<img src="https://user-images.githubusercontent.com/42699812/174386545-799c9869-705d-4c67-b46c-76fca2283c49.jpg" height=60%>
+
+
 
 Hold on, Hold on
 
-![Rao Petion](https://images.hivisasa.com/1200/7JhHhhZWMbFB_IMG_1503130067538.jpg)
+<img src="https://user-images.githubusercontent.com/42699812/174367033-167be582-77d6-49ba-95d5-ff847616903f.jpg" width="50%">
+
 
 There is a petition, lets try validating our blockchain
 
@@ -188,3 +192,6 @@ v 0.1
 [Do you need a blockchain?](https://eprint.iacr.org/2017/375.pdf)
 
 [Daisy](https://github.com/ivoras/daisy)
+
+## Credits
+[Free Stock Images from Pexels](https://www.pexels.com/) 
