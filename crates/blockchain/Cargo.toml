@@ -1,0 +1,17 @@
+[package]
+name = "blockchain"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bincode = "1.3.3"
+types = { path = "../types" }
+database = { path = "../database" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures = "0.3"
+p256 = { version = "0.13.2", features = ["ecdsa", "serde", "pem"] }
+log = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+sha3 = "0.10.1"
+serde = { version = "1", features = ["derive"] }

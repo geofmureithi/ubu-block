@@ -2,40 +2,52 @@
 
 Uchaguzi bila Ubaguzi Blockchain
 
+A transparent, tamper-evident, and community-driven blockchain platform for election results.
+It is currently focused on Kenyan election's data but can easily be adapted for other countries.
+
+## Node Types
+
+- **Submission Nodes:** Allow users to submit polling station results.
+- **Observer Nodes:** Provide public, read-only access for transparency and independent verification.
+- **Verification Nodes:** Cross-reference submitted results with official sources and participate in reward submission.
+
 ## Features
 
-1. Immutable: You can't make changes only append so no `fungua server` and other shenanigans.
-2. Distributed: No single point of data storage.
-3. Accessible: Runs on sqlite which is well supported in most platforms.
-4. Community driven: Dynamic number of signatories
+1. **Immutable:** You can't make changes, only append—no `fungua server` and other shenanigans.
+2. **Distributed:** No single point of data storage.
+3. **Accessible:** Runs on SQLite, widely supported.
+4. **Community Driven:** Dynamic number of signatories.
+5. **Node Roles:** Submission, Observer, and Verification nodes for robust, transparent operations.
+6. **BFT Consensus:** Tolerates up to 1/3 malicious nodes.
+7. **Audit Trail:** All submissions (accepted or rejected) are recorded.
+8. **Encrypted Communication:** End-to-end encryption for all node interactions.
 
 ## Getting Started
 
-```
+```sh
 git clone <repo> ubu-block
 cd ubu-block
 ```
 
-If you want to run binaries without installing rust:
+If you want to run binaries without installing Rust:
 
 1. Get the latest binary from the releases page.
 2. Replace `cargo run` with `ubu-block`
-3. Download the relevant files see `Setup initial files`
+3. Download the relevant files (see "Setup initial files").
 
 ### Setup initial files
 
-```
+```sh
 mkdir data
 
 # Create the db files
 cp src/sql/empty.db data/blockchain.db
 cp src/sql/empty.db data/private.db
-
 ```
 
 ### Initialize a Blockchain
 
-```
+```sh
 cargo run init --creator "Njuguna Mureithi"
 ```
 
@@ -45,13 +57,13 @@ You should get:
 INFO  ubu_block] Blockchain was successfully initialized!
 ```
 
-### Add some blocks
+### Add Some Blocks
 
-Currently `ubu-block` has very limited dummy data, but this should change as soon as IEBC publishes the voter register
+Currently `ubu-block` has very limited dummy data, but this should change as soon as IEBC publishes the voter register.
 
-For testing purposes, I used limited data from previous by elections. See `src/sql/main_db.sql`
+For testing purposes, limited data from previous by-elections is used. See `src/sql/main_db.sql`.
 
-```
+```sh
 cargo run insert --station 022113056303301 --candidate 1 --votes 66
 cargo run insert --station 022113056303301 --candidate 2 --votes 21
 ```
@@ -62,9 +74,9 @@ You should get:
 INFO ubu_block] Block was added successfully!
 ```
 
-### Validate our blockchain
+### Validate the Blockchain
 
-```
+```sh
 cargo run validate
 ```
 
@@ -76,15 +88,15 @@ INFO ubu_block] Blockchain is valid!
 
 ### Querying
 
-```
-cargo run query -q "Select
+```sh
+cargo run query -q "SELECT
   c.name as candidate,
-   SUM(votes) as votes,
+  SUM(votes) as votes,
   ward_name as ward,
   constituency_name as constituency,
   county_name as county,
   parties.title as party
-from
+FROM
   results
   INNER JOIN stations ON stations.id = results.station_id
   INNER JOIN candidates c ON c.id = results.candidate_id
@@ -96,7 +108,7 @@ WHERE
   position_type = 'Mp'  and constituency = 'Juja' GROUP BY candidate ;"
 ```
 
-**_NOTE:_** Currently each query has to return the following columns to work: candidate, votes, ward, constituency, county, party. This is just a temporary issue and should fixed in the next release
+**_NOTE:_** Each query must return the following columns: candidate, votes, ward, constituency, county, party. This is a temporary limitation.
 
 You should get:
 
@@ -105,93 +117,98 @@ You should get:
 | county | constituency |   ward   | candidate | party | votes |
 +--------+--------------+----------+-----------+-------+-------+
 | Kiambu |     Juja     | Kalimoni |   Omosh   |  ODM  |  21   |
-+--------+--------------+----------+-----------+-------+-------+
 | Kiambu |     Juja     | Kalimoni |   Mwas    |  PNU  |  66   |
 +--------+--------------+----------+-----------+-------+-------+
 ```
 
-### Trying to steal the election for Omosh
+### Attempting to Tamper with Results
 
-Since immutability is one of our main goal, lets try to edit votes for `Omosh` and see if we can get away with it
+Since immutability is a core goal, let's try to edit votes for `Omosh` and see if we can get away with it.
 
-Open `blockchain.db` with your favourite sqlite editor and run a query that updates the results:
+Open `blockchain.db` with your favorite SQLite editor and run:
 
 ```sql
 UPDATE "results" SET "votes"= 71 WHERE _rowid_ =1
 ```
 
-Running `query` again we get:
+Running `query` again:
 
 ```
 +--------+--------------+----------+-----------+-------+-------+
 | county | constituency |   ward   | candidate | party | votes |
 +--------+--------------+----------+-----------+-------+-------+
 | Kiambu |     Juja     | Kalimoni |   Omosh   |  ODM  |  71   |
-+--------+--------------+----------+-----------+-------+-------+
 | Kiambu |     Juja     | Kalimoni |   Mwas    |  PNU  |  66   |
 +--------+--------------+----------+-----------+-------+-------+
 ```
 
-Wow congrats to Omosh!
-
+Wow, congrats to Omosh!
 
 <img src="https://user-images.githubusercontent.com/42699812/174386545-799c9869-705d-4c67-b46c-76fca2283c49.jpg" height=60%>
-
-
 
 Hold on, Hold on
 
 <img src="https://user-images.githubusercontent.com/42699812/174367033-167be582-77d6-49ba-95d5-ff847616903f.jpg" width="50%">
 
-
-There is a petition, lets try validating our blockchain
+There is a petition, let's try validating our blockchain:
 
 ```
 cargo run validate
 
 thread 'main' panicked at 'Could not verify block, found 0e70cebe0ab3bd8c3606a08d26483d092534eea4ccdb7816fc2692aee5ed3109, block: Block {... CandidateResult { station_id: 22113056303301, candidate_id: 1, votes: 71 }]......', src/db.rs:189:17
-
 ```
 
-How about that? No `fungua servers` and everything is public and sql friendly
+How about that? No `fungua servers` and everything is public and SQL-friendly.
 
 ## Free Public Servers
 
-Below are the servers you are using for free, it may change along the time. If you are not close to one of these, your network may be slow.
+Below are the servers you are using for free. This may change over time. If you are not close to one of these, your network may be slow.
+
 | Location | Vendor | Specification |
-| --------- | ------------- | ------------------ |
-| France | Vultr | 1 VCPU / 1GB RAM |
+| -------- | ------ | ------------- |
+| France   | Vultr  | 1 VCPU / 1GB RAM |
 
 **_NOTE:_** This will be accessible when `p2p` is ready (hopefully in the next release).
 
+
 ## Roadmap
 
-v 0.3
+### v0.5
+- [ ] Verification node: Reward distribution for correct submissions
 
-- [ ] Http API
+### v0.4
+
+- [ ] Verification node: Cross-reference submitted results with official sources
+- [ ] Encrypted node-to-node communication
+
+### v0.3
+
+- [ ] Submission node: Allow authorized users to submit station results
+- [ ] HTTP API
 - [ ] Mobile and Web apps
 
-v 0.2
+### v0.2
 
-- [ ] P2p - ability to add nodes
-- [ ] Fill regional data
-- [ ] Views to simplify quering
-- [ ] Setup triggers to `Before Insert` to prevent adding unmatching data
-- [ ] Rigourous testing
-- [ ] Tabling of sql results
+- [-] P2P - ability to add nodes
+- [-] Observer node: Public read-only access for transparency
+- [-] Setup initial regional data generically
+- [-] Merkle tree implementation
+- [ ] Basic integration testing
+- [x] Tabling of SQL results
 
-v 0.1
+### v0.1
 
 - [x] Clap
-- [x] Database, sqlite
+- [x] Database, SQLite
 - [x] Blockchain
 - [x] CI/CD
 
+
 ## References
 
-[Do you need a blockchain?](https://eprint.iacr.org/2017/375.pdf)
-
-[Daisy](https://github.com/ivoras/daisy)
+- [Do you need a blockchain?](https://eprint.iacr.org/2017/375.pdf)
+- [Daisy](https://github.com/ivoras/daisy)
 
 ## Credits
-[Free Stock Images from Pexels](https://www.pexels.com/) 
+
+- [Free Stock Images from Pexels](https://www.pexels.com/) 
