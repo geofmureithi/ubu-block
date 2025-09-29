@@ -1,6 +1,6 @@
 use bincode::serialize;
 use p256::{
-    ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey},
+    ecdsa::{Signature, SigningKey, VerifyingKey, signature::Signer},
     elliptic_curve::rand_core::OsRng,
 };
 use serde::Serialize;

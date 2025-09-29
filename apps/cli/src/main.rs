@@ -1,7 +1,7 @@
 use std::path::PathBuf;
-mod validate;
-mod query;
 mod init;
+mod query;
+mod validate;
 
 use clap::{Parser, Subcommand};
 use types::config::Config;

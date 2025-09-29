@@ -7,7 +7,10 @@ use tokio::{
     sync::{RwLock, broadcast},
 };
 use types::{
-    config::Config, error::ChainError, p2p::{P2PConfig, P2PMessage, PeerConnection}, Block
+    Block,
+    config::Config,
+    error::ChainError,
+    p2p::{P2PConfig, P2PMessage, PeerConnection},
 };
 
 #[allow(dead_code)]

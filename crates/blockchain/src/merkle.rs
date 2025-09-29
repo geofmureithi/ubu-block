@@ -87,7 +87,6 @@ impl MerkleTree {
 
         // If we're not at the root yet, recursively build upper levels
         if next_level.len() > 1 {
-            
             Self::build_tree(&next_level)
         } else {
             // We're at the root
