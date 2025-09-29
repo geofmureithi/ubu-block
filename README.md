@@ -5,6 +5,9 @@ Uchaguzi bila Ubaguzi Blockchain
 A transparent, tamper-evident, and community-driven blockchain platform for election results.
 It is currently focused on Kenyan election's data but can easily be adapted for other countries.
 
+> [!NOTE]
+> This code is actively in active development and may break. PRs welcome
+
 ## Node Types
 
 - **Submission Nodes:** Allow users to submit polling station results.
@@ -48,7 +51,7 @@ cp src/sql/empty.db data/private.db
 ### Initialize a Blockchain
 
 ```sh
-cargo run init --creator "Njuguna Mureithi"
+cargo run init --init setup_constituencies.sql
 ```
 
 You should get:
@@ -189,10 +192,10 @@ Below are the servers you are using for free. This may change over time. If you 
 
 ### v0.2
 
-- [-] P2P - ability to add nodes
-- [-] Observer node: Public read-only access for transparency
-- [-] Setup initial regional data generically
-- [-] Merkle tree implementation
+- [x] P2P - ability to add nodes
+- [x] Observer node: Public read-only access for transparency
+- [x] Setup initial regional data generically
+- [x] Merkle tree implementation
 - [ ] Basic integration testing
 - [x] Tabling of SQL results
 
