@@ -1,0 +1,16 @@
+[package]
+name = "database"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sqlx = { version = "0.8", features = [
+    "runtime-tokio-rustls",
+    "sqlite",
+    "chrono",
+] }
+p256 = { version = "0.13.2", features = ["ecdsa", "serde", "pem"] }
+chrono = { version = "0.4", features = ["serde"] }
+bincode = "1.3.3"
+types = { path = "../types" }
+hex = "0.4.3"
