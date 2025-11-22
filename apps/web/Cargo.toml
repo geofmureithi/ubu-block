@@ -1,0 +1,9 @@
+[package]
+name = "web"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+leptos = { version = "0.8.12", features = ["csr"] }
+leptos_meta = "0.8.5"
+leptos_router = "0.8.9"

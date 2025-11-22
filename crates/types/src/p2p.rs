@@ -12,12 +12,12 @@ pub enum P2PMessage {
     Hello {
         node_id: String,
         version: u32,
-        chain_height: u64,
+        chain_height: i64,
     },
     HelloResponse {
         node_id: String,
         version: u32,
-        chain_height: u64,
+        chain_height: i64,
         accepted: bool,
     },
 
@@ -33,10 +33,10 @@ pub enum P2PMessage {
     // Chain synchronization
     ChainHeightRequest,
     ChainHeightResponse {
-        height: u64,
+        height: i64,
     },
     GetBlocks {
-        start_height: u64,
+        start_height: i64,
         count: u32,
     },
     BlocksResponse {
@@ -65,11 +65,11 @@ pub struct PeerConnection {
     pub addr: SocketAddr,
     pub node_id: Option<String>,
     pub last_seen: Instant,
-    pub chain_height: u64,
+    pub chain_height: i64,
     pub is_syncing: bool,
     pub connection_time: Instant,
-    pub bytes_sent: u64,
-    pub bytes_received: u64,
+    pub bytes_sent: i64,
+    pub bytes_received: i64,
     pub last_ping: Option<Instant>,
 }
 

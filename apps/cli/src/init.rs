@@ -8,7 +8,7 @@ use types::{
     crypto::{self, sha256_digest},
 };
 
-pub async fn init_blockchain(config: Config, init_query: &str) {
+pub async fn init_blockchain(config: Config, init_query_path: &str) {
     let main_db = SqlitePool::connect(&config.main_db).await.unwrap();
     let private_db = SqlitePool::connect(&config.private_db).await.unwrap();
     let mut tx = main_db.begin().await.unwrap();
@@ -34,7 +34,7 @@ pub async fn init_blockchain(config: Config, init_query: &str) {
     let priv_key_bytes = private_key.to_bytes().as_slice().to_vec();
 
     // Save keypair to db
-    db.add_public_key(&pub_key_bytes, "ADMIN", &pub_key_hash, -1)
+    db.add_public_key(&pub_key_bytes, "genesis", &pub_key_hash, -1)
         .await
         .unwrap();
 
@@ -48,11 +48,12 @@ pub async fn init_blockchain(config: Config, init_query: &str) {
 
     //assert_eq!(&my_keys.get(0).unwrap(), &pub_key_hash);
     let pub_key = db.get_public_key(&pub_key_hash).await.unwrap();
-
+    let init_query = std::fs::read_to_string(init_query_path).unwrap();
+    let init_query_hash = sha256_digest(&init_query);
     // let there be light
-    let genesis_block = Block::genesis(&(private_key, verify_key, pub_key), init_query.to_string());
+    let genesis_block = Block::genesis(&(private_key, verify_key, pub_key), init_query_hash);
     let mut blockchain = BlockChain::new(db, None);
-    sqlx::query(init_query).execute(&main_db).await.unwrap();
+    sqlx::query(&init_query).execute(&main_db).await.unwrap();
     blockchain.add_block(&genesis_block).await.unwrap();
     assert!(blockchain.is_valid().await.unwrap());
     log::info!("Blockchain was successfully initialized!");

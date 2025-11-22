@@ -13,9 +13,6 @@ use types::{
     p2p::{P2PConfig, P2PMessage, PeerConnection},
 };
 
-#[allow(dead_code)]
-mod merkle;
-
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -26,7 +23,7 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct BlockChain {
-    db: Database,
+    pub db: Database,
     peers: Arc<RwLock<HashMap<SocketAddr, PeerConnection>>>,
     message_tx: broadcast::Sender<P2PMessage>,
     node_id: String,
@@ -114,18 +111,16 @@ impl BlockChain {
         if self.peers.read().await.contains_key(&addr) {
             return Ok(()); // Already connected
         }
-
         log::info!("🔗 Connecting to peer: {addr}");
 
         let stream = tokio::time::timeout(self.config.connection_timeout, TcpStream::connect(addr))
             .await??;
 
         let mut blockchain = self.clone();
-        tokio::spawn(async move {
-            if let Err(e) = blockchain.handle_peer_connection(stream, addr).await {
-                log::error!("Error in outgoing connection to {addr}: {e}");
-            }
-        });
+
+        if let Err(e) = blockchain.handle_peer_connection(stream, addr).await {
+            log::error!("Error in outgoing connection to {addr}: {e}");
+        }
 
         Ok(())
     }
@@ -145,7 +140,12 @@ impl BlockChain {
         }
 
         // Perform handshake
-        let chain_height = self.get_chain_height().await.unwrap_or(0);
+        let chain_height = self
+            .get_chain_height()
+            .await
+            .unwrap_or(0)
+            .try_into()
+            .unwrap_or_default();
         let hello_msg = P2PMessage::Hello {
             node_id: self.node_id.clone(),
             version: 1,
@@ -164,12 +164,7 @@ impl BlockChain {
                     match result {
                         Ok(message) => {
                             // Extract stream handling into separate async block to avoid cycle
-                            let result = self.process_p2p_message(message, peer_addr, &mut stream).await;
-
-                            if let Err(e) = result {
-                                log::error!("Error handling message from {peer_addr}: {e}");
-                                break;
-                            }
+                            self.process_p2p_message(message, peer_addr, &mut stream).await?;
                         }
                         Err(_) => {
                             log::warn!("Connection closed by peer: {peer_addr}");
@@ -182,9 +177,7 @@ impl BlockChain {
                 broadcast_result = message_rx.recv() => {
                     if let Ok(message) = broadcast_result {
                         // Don't send message back to sender
-                        if self.send_message(&mut stream, &message).await.is_err() {
-                            break;
-                        }
+                        self.send_message(&mut stream, &message).await?;
                     }
                 }
             }
@@ -242,7 +235,12 @@ impl BlockChain {
             P2PMessage::BlockRequest { hash } => self.handle_block_request(hash, stream).await,
 
             P2PMessage::ChainHeightRequest => {
-                let height = self.get_chain_height().await.unwrap_or(0);
+                let height = self
+                    .get_chain_height()
+                    .await
+                    .unwrap_or(0)
+                    .try_into()
+                    .unwrap();
                 let response = P2PMessage::ChainHeightResponse { height };
                 self.send_message(stream, &response).await
             }
@@ -293,7 +291,7 @@ impl BlockChain {
     async fn handle_hello_message(
         &self,
         node_id: String,
-        chain_height: u64,
+        chain_height: i64,
         peer_addr: SocketAddr,
         stream: &mut TcpStream,
     ) -> Result<(), ChainError> {
@@ -306,7 +304,7 @@ impl BlockChain {
         }
 
         // Send response
-        let our_height = self.get_chain_height().await.unwrap_or(0);
+        let our_height = self.get_chain_height().await?.try_into().unwrap();
         let response = P2PMessage::HelloResponse {
             node_id: self.node_id.clone(),
             version: 1,
@@ -315,8 +313,10 @@ impl BlockChain {
         };
         self.send_message(stream, &response).await?;
 
+        dbg!(our_height, chain_height);
+
         // Start sync if peer has higher chain
-        if chain_height > our_height {
+        if chain_height > (our_height as i64) {
             self.request_chain_sync(peer_addr, stream).await?;
         }
 
@@ -326,7 +326,7 @@ impl BlockChain {
     async fn handle_hello_response(
         &self,
         node_id: String,
-        chain_height: u64,
+        chain_height: i64,
         accepted: bool,
         peer_addr: SocketAddr,
         stream: &mut TcpStream,
@@ -339,6 +339,7 @@ impl BlockChain {
                 peer.node_id = Some(node_id);
                 peer.chain_height = chain_height;
             }
+            
 
             // Start sync if peer has higher chain
             let our_height = self.get_chain_height().await.unwrap_or(0);
@@ -369,7 +370,7 @@ impl BlockChain {
 
     async fn handle_get_blocks_request(
         &self,
-        start_height: u64,
+        start_height: i64,
         count: u32,
         stream: &mut TcpStream,
     ) -> Result<(), ChainError> {
@@ -458,7 +459,7 @@ impl BlockChain {
         log::info!("🔄 Starting chain sync from height {our_height} with {peer_addr}");
 
         let sync_msg = P2PMessage::GetBlocks {
-            start_height: our_height,
+            start_height: our_height.try_into().unwrap(),
             count: self.config.sync_batch_size,
         };
 
@@ -535,9 +536,9 @@ impl BlockChain {
     }
 
     // Blockchain operations (these would interact with your Database)
-    async fn get_chain_height(&self) -> Result<u64, ChainError> {
+    async fn get_chain_height(&self) -> Result<i64, ChainError> {
         let height = self.db.get_height().await?;
-        Ok(height as u64)
+        Ok(height)
     }
 
     async fn get_block_by_hash(&self, hash: &str) -> Result<Option<Block>, ChainError> {
@@ -548,11 +549,13 @@ impl BlockChain {
     #[allow(unused)]
     async fn get_blocks_range(
         &self,
-        start_height: u64,
+        start_height: i64,
         count: u32,
     ) -> Result<Vec<Block>, ChainError> {
-        // self.db.get_blocks_in_range(start_height, count).await
-        Ok(vec![]) // Placeholder
+        Ok(self
+            .db
+            .get_blocks_in_range(start_height, count as i64)
+            .await?)
     }
 
     async fn handle_new_block(&mut self, block: Block) -> Result<i64, ChainError> {
@@ -561,6 +564,14 @@ impl BlockChain {
     }
 
     async fn add_block_to_chain(&mut self, block: Block) -> Result<i64, ChainError> {
+        self.db
+            .add_public_key(
+                block.creator_pub_key.as_bytes(),
+                &block.creator,
+                &block.signature_pub_key_hash,
+                block.height as i32,
+            )
+            .await;
         let res = self.db.add_block(&block).await?;
         Ok(res)
     }
@@ -603,49 +614,4 @@ mod tests {
         assert_eq!(blockchain.peer_count().await, 0);
         assert!(!blockchain.node_id.is_empty());
     }
-}
-
-#[tokio::test]
-// Example usage function
-async fn run_example() {
-    let db1 = Database::new_in_memory();
-    let db2 = Database::new_in_memory();
-
-    // Start first node on port 9000
-    let node1 = BlockChain::new(db1, Some(Default::default()));
-    let blockchain = node1.clone();
-    tokio::spawn(async move {
-        node1
-            .start_p2p_server("127.0.0.1:9000".parse().unwrap())
-            .await
-    });
-
-    // Start second node on port 9009
-    let node2 = BlockChain::new(db2, Some(Default::default()));
-    tokio::spawn(async move {
-        node2
-            .start_p2p_server("127.0.0.1:9009".parse().unwrap())
-            .await
-    });
-
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    // Connect to other peers
-    let peer_addr = "127.0.0.1:9009".parse().unwrap();
-    blockchain.connect_to_peer(peer_addr).await.unwrap();
-
-    // Create and announce a new block
-    let key = types::crypto::get_private_key();
-    let pub_key = types::PubKey::new_dummy();
-    let signer = (key.clone(), types::crypto::get_public_key(&key), pub_key);
-
-    let results = vec![types::CandidateResult::new(1, 1, 100)];
-    let block = Block::new(
-        &signer,
-        "1000000000000000000000000000000000000000000000000000000000000001",
-        results,
-        1,
-    );
-
-    blockchain.announce_block(block).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 }

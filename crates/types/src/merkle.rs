@@ -1,5 +1,5 @@
 use sha3::{Digest, Sha3_256 as Sha256};
-use types::CandidateResult;
+use crate::CandidateResult;
 
 #[derive(Debug, Clone)]
 pub struct MerkleNode {

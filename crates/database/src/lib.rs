@@ -4,6 +4,7 @@ use bincode::deserialize;
 use chrono::{DateTime, Utc};
 use p256::ecdsa::{Signature, SigningKey, VerifyingKey, signature::Verifier};
 
+use sqlx::Execute;
 use types::{Block, ElectionBlockHeader, PubKey};
 
 pub const PRIV_SETUP: &str = include_str!("../sql/private_db.sql");
@@ -35,26 +36,38 @@ impl Database {
     }
     pub async fn add_block(&mut self, block: &Block) -> Result<i64, sqlx::Error> {
         let mut tx = self.chain_db.begin().await.unwrap();
-        let height = self.get_height().await?;
-        sqlx::query("INSERT INTO blockchain (hash, height, prev_hash, sigkey_hash, hash_signature, prev_hash_signature, timestamp, version) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);")
+        let mut height = block.height as i64;
+
+        // ignore genesis
+        if height != 0 {
+            height = self.get_height().await? as i64 + 1;
+        } else {
+            assert!(
+                matches!(block.inner, types::BlockType::Genesis),
+                "First block must be genesis"
+            );
+        }
+
+        dbg!(&block);
+
+        sqlx::query("INSERT INTO blockchain (hash, height, prev_hash, sigkey_hash, hash_signature, prev_hash_signature, timestamp, version, merkle_root) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);")
         .bind(&block.hash)
-        .bind(height + 1)
+        .bind(height)
         .bind(&block.prev_hash)
         .bind(&block.signature_pub_key_hash)
         .bind(&block.hash_signature)
         .bind(&block.prev_hash_signature)
         .bind(block.timestamp)
         .bind(block.version as i64)
-        .execute(&mut *tx)
-        .await?
-        .last_insert_rowid();
+        .bind(&block.merkle_root[..])
+        .execute(&mut *tx).await?.last_insert_rowid();
 
         let results = match &block.inner {
             types::BlockType::Result(results) => results,
-            types::BlockType::Pending => panic!("Cannot add pending block to chain"),
-            types::BlockType::Genesis => panic!("Cannot add genesis block to chain"),
-            // _ => &vec![],
+            _ => &vec![],
         };
+
+        println!("Adding results: {:?}", results);
 
         for result in results {
             let query = "INSERT INTO results VALUES(?1, ?2, ?3, ?4);";
@@ -62,26 +75,28 @@ impl Database {
                 .bind(result.station_id)
                 .bind(result.candidate_id)
                 .bind(result.votes)
-                .bind(height + 1)
+                .bind(height)
                 .execute(&mut *tx)
                 .await?;
         }
+
+        self.is_valid().await?; // TODO: Handle invalid chains more gracefully
         tx.commit().await?;
 
-        Ok(height + 1)
+        Ok(height)
     }
 
     pub async fn add_public_key(
         &self,
-        pub_key: &Vec<u8>,
+        pub_key: &[u8],
         creator: &str,
-        hash: &str,
+        pubkey_hash: &str,
         block_height: i32,
     ) -> Result<i64, sqlx::Error> {
         let mut pool = self.chain_db.acquire().await?;
         let sql = "INSERT INTO pubkeys(pubkey_hash, creator, pubkey, state, time_added, block_height) VALUES (?, ?, ?, ?, ?, ?)";
         let res = sqlx::query(sql)
-            .bind(hash)
+            .bind(pubkey_hash)
             .bind(creator)
             .bind(hex::encode(pub_key))
             .bind("A")
@@ -217,29 +232,84 @@ impl Database {
 
     pub async fn is_valid(&self) -> Result<bool, sqlx::Error> {
         let height = self.get_height().await?;
+
         for index in 0..height {
+            dbg!(index);
             let block = self.get_block_by_height(index).await?;
-            let hash = &block.hash;
-            let hashed = types::crypto::hash_block(&ElectionBlockHeader {
-                block_number: block.height as u64,
-                // merkle_root: [0u8; 32],
-                previous_hash: hex::decode(&block.prev_hash).unwrap().try_into().unwrap(),
+
+            let prev_hash = if index == 0 {
+                [0u8; 32]
+            } else {
+                self.get_block_by_height(index - 1)
+                    .await?
+                    .hash
+                    .as_bytes()
+                    .try_into()
+                    .unwrap()
+            };
+
+            // 1. Reconstruct the header using the stored merkle_root
+            let header = ElectionBlockHeader {
+                block_number: block.height as i64,
+                merkle_root: block.merkle_root, // already stored, no recomputation
+                previous_hash: prev_hash,
                 validator_signature: block.signature_pub_key_hash.clone(),
-                timestamp: block.timestamp.timestamp() as u64,
-            });
-            if hash != &hashed {
-                panic!(
-                    "Could not verify block, found {}, block: {:?}",
-                    hashed, &block
-                )
+                timestamp: block.timestamp.timestamp() as i64,
+            };
+
+            // 2. Re-hash header and compare
+            let calculated_hash = types::crypto::hash_block(&header);
+            if calculated_hash != block.hash {
+                return Err(sqlx::Error::Protocol(
+                    format!("Block hash mismatch at index {}", index).into(),
+                ));
             }
+
+            // 3. Verify signature
             let pub_key = self.get_public_key(&block.signature_pub_key_hash).await?;
             let verifier: VerifyingKey = deserialize(&pub_key.bytes).unwrap();
-            let hash_bytes = hex::decode(hash).unwrap();
-            let signature: Signature = deserialize(&hex::decode(&block.hash_signature).unwrap())
-                .unwrap_or_else(|_| panic!("Could not verify block: {index}"));
-            verifier.verify(&hash_bytes, &signature).unwrap();
+            let signature_bytes = hex::decode(&block.hash_signature).unwrap();
+            let signature: Signature = deserialize(&signature_bytes).unwrap();
+            verifier
+                .verify(calculated_hash.as_bytes(), &signature)
+                .unwrap();
+
+            // 4. Verify chain linkage
+            if block.prev_hash != hex::encode(prev_hash) {
+                return Err(sqlx::Error::Protocol(
+                    format!("Previous hash mismatch at index {}", index).into(),
+                ));
+            }
         }
+
         Ok(true)
+    }
+
+    // TODO: Optimize this to a single query
+    pub async fn get_blocks_in_range(
+        &self,
+        start: i64,
+        end: i64,
+    ) -> Result<Vec<Block>, sqlx::Error> {
+        dbg!(start, end);
+        let mut blocks = Vec::new();
+        let mut pool = self.chain_db.acquire().await?;
+        let raw_blocks: Vec<Block> =
+            sqlx::query_as("SELECT * FROM blockchain WHERE height >= ?1 AND height <= ?2")
+                .bind(start as i64)
+                .bind(end as i64)
+                .fetch_all(&mut *pool)
+                .await?;
+        for mut block in raw_blocks {
+            let results = sqlx::query_as("Select * from results where block_height = ?1")
+                .bind(block.height as i64)
+                .fetch_all(&mut *pool)
+                .await?;
+            let pub_key = self.get_public_key(&block.signature_pub_key_hash).await?;
+            block.set_results(results);
+            block.set_pub_key(pub_key);
+            blocks.push(block);
+        }
+        Ok(blocks)
     }
 }
