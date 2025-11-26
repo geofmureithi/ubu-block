@@ -1,0 +1,11 @@
+[project]
+name = "extract"
+version = "0.1.0"
+description = "extract data from IEBC GAZETTE"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "camelot-py[base]>=1.0.9",
+    "pandas>=2.3.3",
+    "tqdm>=4.67.1",
+]
