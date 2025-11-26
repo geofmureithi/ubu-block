@@ -1,0 +1,11 @@
+[package]
+name = "web"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gloo-net = { version = "0.6.0", features = ["http", "eventsource"] }
+leptos = { version = "0.8.12", features = ["csr"] }
+leptos_meta = "0.8.5"
+leptos_router = "0.8.9"
+types = { path = "../../crates/types" }

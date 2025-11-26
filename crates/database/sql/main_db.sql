@@ -95,6 +95,7 @@ CREATE TABLE blockchain (
     prev_hash VARCHAR NOT NULL,
     prev_hash_signature VARCHAR NOT NULL,
     version INTEGER NOT NULL,
+    merkle_root BLOB NOT NULL,
     FOREIGN KEY("sigkey_hash") REFERENCES "pubkeys" ("pubkey_hash")
 );
 

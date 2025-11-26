@@ -1,21 +1,35 @@
 pub mod config;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod crypto;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod error;
+pub mod models;
 pub mod p2p;
 
+#[cfg(not(target_arch = "wasm32"))]
 use bincode::deserialize;
 use chrono::{DateTime, Utc};
+#[cfg(not(target_arch = "wasm32"))]
 use p256::ecdsa::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256 as Sha256};
-use sqlx::{FromRow, sqlite::SqliteRow};
 
-use crate::crypto::{sha256_digest, sign_hash};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::{
+    crypto::{sha256_digest, sign_hash},
+    merkle::MerkleTree,
+};
 pub const VERSION: usize = 1;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod merkle;
+pub mod results;
+
+#[cfg(not(target_arch = "wasm32"))]
 pub type BlockSigner = (SigningKey, VerifyingKey, PubKey);
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(sqlx::FromRow))]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CandidateResult {
     pub station_id: i64,
     pub candidate_id: i64,
@@ -36,6 +50,7 @@ impl CandidateResult {
 pub struct Block {
     pub hash: String,
     pub hash_signature: String,
+    pub merkle_root: [u8; 32],
     pub inner: BlockType,
     pub height: usize,
     pub signature_pub_key_hash: String,
@@ -55,11 +70,13 @@ pub enum BlockType {
 }
 
 impl Block {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new(
         signer: &BlockSigner,
         prev_hash: &str,
         results: Vec<CandidateResult>,
         height: usize,
+        merkle_root: [u8; 32],
     ) -> Self {
         let prev_hash_signature = sign_hash(&signer.0, prev_hash);
         let sigkey_hash = sha256_digest(&signer.1);
@@ -71,9 +88,9 @@ impl Block {
                 .as_slice()
                 .try_into()
                 .unwrap(),
-            // TODO: merkle root of results
-            timestamp: Utc::now().timestamp() as u64,
-            block_number: height as u64,
+            merkle_root,
+            timestamp: Utc::now().timestamp() as i64,
+            block_number: height as i64,
             validator_signature: sigkey_hash.clone(),
         });
         let hash_signature = sign_hash(&signer.0, &hash);
@@ -82,6 +99,7 @@ impl Block {
             hash_signature,
             inner: BlockType::Result(results),
             height,
+            merkle_root,
             timestamp: Utc::now(),
             prev_hash: prev_hash.to_string(),
             signature_pub_key_hash: sigkey_hash.to_string(),
@@ -96,31 +114,43 @@ impl Block {
         if let BlockType::Result(ref mut rb) = self.inner {
             *rb = results;
         } else {
-            panic!("Cannot set results on a genesis block");
+            // panic!("Cannot set results on a genesis block");
         }
     }
 
+    pub fn get_results(&self) -> Vec<CandidateResult> {
+        if let BlockType::Result(ref rb) = self.inner {
+            rb.clone()
+        } else {
+            vec![]
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn set_pub_key(&mut self, pub_key: PubKey) {
         self.creator = pub_key.creator;
         let public_key: VerifyingKey = deserialize(&pub_key.bytes).unwrap();
         self.creator_pub_key = sha256_digest(&public_key);
     }
 
-    pub fn genesis(signer: &BlockSigner, init_query: String) -> Self {
-        let prev_hash = "1000000000000000000000000000000000000000000000000000000000000001";
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn genesis(signer: &BlockSigner, init_query_hash: String) -> Self {
+        let prev_hash = "0000000000000000000000000000000000000000000000000000000000000000";
+        let tree = MerkleTree::from_election_results_proper(&[]);
+        let root = tree.get_root_hash();
         let hash = crate::crypto::hash_block(&ElectionBlockHeader {
             previous_hash: hex::decode(prev_hash)
                 .unwrap()
                 .as_slice()
                 .try_into()
                 .unwrap(),
-            // merkle_root: [0u8; 32],
-            timestamp: Utc::now().timestamp() as u64,
+            merkle_root: [0u8; 32],
+            timestamp: Utc::now().timestamp() as i64,
             block_number: 0,
             validator_signature: sha256_digest(&signer.1),
         });
         let hash_signature = sign_hash(&signer.0, &hash);
-        let prev_hash_signature = sign_hash(&signer.0, &init_query);
+        let prev_hash_signature = sign_hash(&signer.0, &init_query_hash);
         let sigkey_hash = sha256_digest(&signer.1);
         Self {
             prev_hash: prev_hash.to_string(),
@@ -130,6 +160,7 @@ impl Block {
             signature_pub_key_hash: sigkey_hash,
             timestamp: Utc::now(),
             hash,
+            merkle_root: [0u8; 32],
             prev_hash_signature,
             creator: "GENESIS".to_string(),
             creator_pub_key: "".to_string(), // No creator for genesis block?
@@ -166,8 +197,9 @@ impl PubKey {
     }
 }
 
-impl<'r> FromRow<'r, SqliteRow> for Block {
-    fn from_row(row: &'r SqliteRow) -> Result<Self, sqlx::Error> {
+#[cfg(not(target_arch = "wasm32"))]
+impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for Block {
+    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
         use sqlx::Row;
         let hash = row.try_get("hash")?;
         let hash_signature = row.try_get("hash_signature")?;
@@ -178,6 +210,8 @@ impl<'r> FromRow<'r, SqliteRow> for Block {
         let version: i64 = row.try_get("version")?;
         let timestamp = row.try_get("timestamp")?;
 
+        let merkle_root: Vec<u8> = row.try_get("merkle_root")?;
+
         if height == 0 {
             return Ok(Block {
                 hash,
@@ -187,6 +221,7 @@ impl<'r> FromRow<'r, SqliteRow> for Block {
                 signature_pub_key_hash: sigkey_hash,
                 timestamp,
                 prev_hash,
+                merkle_root: merkle_root.as_slice().try_into().unwrap(),
                 prev_hash_signature,
                 creator: Default::default(),
                 creator_pub_key: Default::default(),
@@ -197,11 +232,12 @@ impl<'r> FromRow<'r, SqliteRow> for Block {
         Ok(Block {
             hash,
             hash_signature,
-            inner: BlockType::Pending,
+            inner: BlockType::Result(vec![]),
             height: height as usize,
             signature_pub_key_hash: sigkey_hash,
             timestamp,
             prev_hash,
+            merkle_root: merkle_root.as_slice().try_into().unwrap(),
             prev_hash_signature,
             creator: Default::default(),
             creator_pub_key: Default::default(),
@@ -213,9 +249,9 @@ impl<'r> FromRow<'r, SqliteRow> for Block {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElectionBlockHeader {
     pub previous_hash: [u8; 32],
-    // pub merkle_root: [u8; 32],        // Hash of all election results
-    pub timestamp: u64,
-    pub block_number: u64,
+    pub merkle_root: [u8; 32], // Hash of all election results
+    pub timestamp: i64,
+    pub block_number: i64,
     pub validator_signature: String, // Instead of PoW nonce
 }
 

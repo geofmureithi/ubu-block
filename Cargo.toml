@@ -5,8 +5,9 @@ edition = "2024"
 
 [workspace]
 resolver = "3"
-members = [
+members = ["apps/api",
     "apps/cli",
+    "apps/web",
     "crates/blockchain",
     "crates/database",
     "crates/types",

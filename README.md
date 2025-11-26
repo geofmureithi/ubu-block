@@ -2,6 +2,8 @@
 
 Uchaguzi bila Ubaguzi Blockchain
 
+<img src="./assets/submit2.png">
+
 A transparent, tamper-evident, and community-driven blockchain platform for election results.
 It is currently focused on Kenyan election's data but can easily be adapted for other countries.
 
@@ -30,6 +32,7 @@ It is currently focused on Kenyan election's data but can easily be adapted for 
 ```sh
 git clone <repo> ubu-block
 cd ubu-block
+mkdir data
 ```
 
 If you want to run binaries without installing Rust:
@@ -144,16 +147,7 @@ Running `query` again:
 | Kiambu |     Juja     | Kalimoni |   Mwas    |  PNU  |  66   |
 +--------+--------------+----------+-----------+-------+-------+
 ```
-
-Wow, congrats to Omosh!
-
-<img src="https://user-images.githubusercontent.com/42699812/174386545-799c9869-705d-4c67-b46c-76fca2283c49.jpg" height=60%>
-
-Hold on, Hold on
-
-<img src="https://user-images.githubusercontent.com/42699812/174367033-167be582-77d6-49ba-95d5-ff847616903f.jpg" width="50%">
-
-There is a petition, let's try validating our blockchain:
+Let's try validating our blockchain:
 
 ```
 cargo run validate
@@ -167,11 +161,9 @@ How about that? No `fungua servers` and everything is public and SQL-friendly.
 
 Below are the servers you are using for free. This may change over time. If you are not close to one of these, your network may be slow.
 
-| Location | Vendor | Specification |
-| -------- | ------ | ------------- |
-| France   | Vultr  | 1 VCPU / 1GB RAM |
-
-**_NOTE:_** This will be accessible when `p2p` is ready (hopefully in the next release).
+| Location | Vendor | Specification | IP |
+| -------- | ------ | ------------- | --- |
+| Frankfurt   | Digital Ocean  | 2 VCPU / 2GB RAM | 157.***.***.***
 
 
 ## Roadmap
@@ -186,9 +178,9 @@ Below are the servers you are using for free. This may change over time. If you 
 
 ### v0.3
 
-- [ ] Submission node: Allow authorized users to submit station results
-- [ ] HTTP API
-- [ ] Mobile and Web apps
+- [x] Submission node: Allow authorized users to submit station results
+- [x] HTTP API
+- [x] Mobile and Web apps
 
 ### v0.2
 
@@ -214,4 +206,4 @@ Below are the servers you are using for free. This may change over time. If you 
 
 ## Credits
 
-- [Free Stock Images from Pexels](https://www.pexels.com/) 
+- [Free Stock Images from Pexels](https://www.pexels.com/)

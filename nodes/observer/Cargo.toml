@@ -8,3 +8,12 @@ blockchain = { path = "../../crates/blockchain" }
 database = { path = "../../crates/database" }
 types = { path = "../../crates/types" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+log = "0.4"
+env_logger = "0.11"
+
+
+sqlx = { version = "0.8", features = [
+    "runtime-tokio-rustls",
+    "sqlite",
+    "chrono",
+] }

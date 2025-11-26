@@ -54,14 +54,14 @@ VALUES
         685
     );
 
--- INSERT INTO
---     candidates
--- VALUES
---     (1, "Mwas", "M", "", "Mp", 1, 022113056303301),
---     (2, "Omosh", "M", "", "Mp", 2, 022113056303301);
+INSERT INTO
+    candidates
+VALUES
+    (1, "Mwas", "M", "", "Mp", 1, 022113056303301),
+    (2, "Omosh", "M", "", "Mp", 2, 022113056303301);
 
--- INSERT INTO
---     candidates
--- VALUES
---     (3, "Adhis", "F", "", "Mp", 1, 045261130100402),
---     (4, "Juma", "F", "", "Mp", 2, 045261130100402);
+INSERT INTO
+    candidates
+VALUES
+    (3, "Adhis", "F", "", "Mp", 1, 045261130100402),
+    (4, "Juma", "F", "", "Mp", 2, 045261130100402);

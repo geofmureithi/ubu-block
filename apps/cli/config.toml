@@ -1,2 +1,0 @@
-main_db = "sqlite://../../data/blockchain.db"
-private_db = "sqlite://../../data/private.db"
