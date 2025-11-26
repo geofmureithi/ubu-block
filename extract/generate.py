@@ -93,6 +93,13 @@ def clean_row(row: pd.Series) -> Dict[str, str]:
         if num:
             row["polling_station_code"] = num
             row["polling_station_name"] = text
+    # Fix cases where polling_station_code is missing but name contains both
+    val = row.get("polling_station_code")
+    if pd.isna(val) or val == "":
+        num, text = extract_number_and_text(str(row.get("polling_station_name", "")))
+        if num:
+            row["polling_station_code"] = num
+            row["polling_station_name"] = text
 
     # Fix cases where constituency_code is blank and county_name contains mixed text
     val = row.get("constituency_code")
@@ -101,6 +108,14 @@ def clean_row(row: pd.Series) -> Dict[str, str]:
         if num:
             row["constituency_code"] = num
             row["county_name"] = text
+    
+    #Fix cases where the registered_voters column is empty but the polling_station_name column contains both ward name and registered voters
+    val = row.get("registered_voters")
+    if pd.isna(val) or str(val).lower() == "nan" or val == "":
+        num, text = extract_number_and_text(str(row.get("polling_station_name", "")))
+        if num:
+            row["registered_voters"] = num
+            row["polling_station_name"] = text
 
     # Final JSON-ready cleaned format
     return {
