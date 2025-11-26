@@ -1,7 +1,9 @@
+use std::str::FromStr;
+
 use bincode::serialize;
 use blockchain::BlockChain;
 use database::Database;
-use sqlx::SqlitePool;
+use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 use types::{
     Block,
     config::Config,
@@ -9,8 +11,15 @@ use types::{
 };
 
 pub async fn init_blockchain(config: Config, init_query_path: &str) {
-    let main_db = SqlitePool::connect(&config.main_db).await.unwrap();
-    let private_db = SqlitePool::connect(&config.private_db).await.unwrap();
+    let pool_cfg = SqliteConnectOptions::from_str(&config.main_db)
+        .unwrap()
+        .create_if_missing(true);
+    let main_db = SqlitePool::connect_with(pool_cfg).await.unwrap();
+
+    let pool_cfg = SqliteConnectOptions::from_str(&config.private_db)
+        .unwrap()
+        .create_if_missing(true);
+    let private_db = SqlitePool::connect_with(pool_cfg).await.unwrap();
     let mut tx = main_db.begin().await.unwrap();
     sqlx::query(database::MAIN_SETUP)
         .execute(&mut *tx)

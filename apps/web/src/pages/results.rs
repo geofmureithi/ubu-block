@@ -2,10 +2,10 @@ use leptos::prelude::*;
 
 use crate::AppState;
 use crate::components::election_map::ElectionMap;
-use crate::components::result_stream::ResultsStream;
+use crate::components::result_table::ResultsTable;
 
 #[component]
-pub fn HomePage() -> impl IntoView {
+pub fn ResultsPage() -> impl IntoView {
     let result_type = use_context::<AppState>().map(|s| s.result_type).unwrap();
     view! {
         <>
@@ -15,7 +15,7 @@ pub fn HomePage() -> impl IntoView {
                     <ElectionMap result_type=result_type.get() />
                 </div>
                 <div class="hidden md:block w-full md:w-1/2 bg-background">
-                    <ResultsStream result_type=result_type.get() />
+                    <ResultsTable result_type=result_type.get() />
                 </div>
             </div>
         </>

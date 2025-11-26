@@ -1,0 +1,7 @@
+main_db = "sqlite://../../data/blockchain1.db"
+private_db = "sqlite://../../data/private1.db"
+http_addr = "127.0.0.1:9092"
+node_addr = "127.0.0.1:9093"
+
+[peers]
+default = "127.0.0.1:9090"

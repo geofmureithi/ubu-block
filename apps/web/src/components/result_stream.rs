@@ -86,7 +86,6 @@ pub fn ResultsStream(result_type: String) -> impl IntoView {
                     <p class="text-sm text-muted-foreground">"Updated every 30 seconds"</p>
                 </div>
 
-                {}
                 <div class="space-y-3">
                     <For
                         each=move || results.get()

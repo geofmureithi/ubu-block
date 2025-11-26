@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos_router::components::A;
 
 #[derive(Clone)]
 pub struct ResultData {
@@ -23,9 +24,11 @@ pub fn ResultCard(result: ResultData) -> impl IntoView {
     view! {
         <div class="p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow cursor-pointer group">
             <div class="flex items-center justify-between mb-3">
+                <A href="/results">
                 <h3 class="font-semibold text-foreground group-hover:text-primary transition-colors">
                     {result.county}
                 </h3>
+                </A>
 
                 <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-[color:var(--secondary)] text-[color:var(--secondary-foreground)]">
                     {result.polls_centers_reporting}

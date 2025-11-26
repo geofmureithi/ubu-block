@@ -97,6 +97,8 @@ async fn main() {
                 candidate_id: *candidate_id,
                 votes: *votes,
             }];
+
+            assert!(results.len() > 0, "No empty results");
             let signer = db.get_private_key().await.unwrap();
             let prev_hash = db.get_block_by_height(height).await.unwrap().hash;
 
@@ -108,7 +110,7 @@ async fn main() {
                 &prev_hash,
                 results,
                 (height + 1) as usize,
-                [0u8; 32],
+                root.unwrap(),
             );
             let client = reqwest::Client::new();
             match client

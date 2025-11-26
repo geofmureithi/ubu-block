@@ -30,6 +30,7 @@ It is currently focused on Kenyan election's data but can easily be adapted for 
 ```sh
 git clone <repo> ubu-block
 cd ubu-block
+mkdir data
 ```
 
 If you want to run binaries without installing Rust:
@@ -214,4 +215,4 @@ Below are the servers you are using for free. This may change over time. If you 
 
 ## Credits
 
-- [Free Stock Images from Pexels](https://www.pexels.com/) 
+- [Free Stock Images from Pexels](https://www.pexels.com/)

@@ -4,6 +4,7 @@ use types::p2p::P2PConfig;
 
 #[tokio::main]
 async fn main() {
+    // TODO: This should come from genesis
     let init_sql = r#"
     INSERT INTO
     positions
@@ -88,7 +89,6 @@ VALUES
         .execute(&blockchain.db.chain_db)
         .await
         .unwrap();
-
 
     // Start the node and connect to a peer
     blockchain.connect_to_peer(peer_addr).await.unwrap();

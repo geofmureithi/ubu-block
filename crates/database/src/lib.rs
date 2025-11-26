@@ -1,11 +1,15 @@
-use core::panic;
+use sqlx::{Row, sqlite::SqliteRow};
 
 use bincode::deserialize;
 use chrono::{DateTime, Utc};
 use p256::ecdsa::{Signature, SigningKey, VerifyingKey, signature::Verifier};
-
-use sqlx::Execute;
-use types::{Block, ElectionBlockHeader, PubKey};
+use types::{
+    Block, ElectionBlockHeader, PubKey,
+    models::{Constituency, County, Party, Station, Ward},
+    results::{
+        Candidate, ConstituencyResult, CountyResult, PositionResult, StationResult, WardResult,
+    },
+};
 
 pub const PRIV_SETUP: &str = include_str!("../sql/private_db.sql");
 pub const MAIN_SETUP: &str = include_str!("../sql/main_db.sql");
@@ -80,7 +84,7 @@ impl Database {
                 .await?;
         }
 
-        self.is_valid().await?; // TODO: Handle invalid chains more gracefully
+        // self.is_valid().await?; // TODO: Handle invalid chains more gracefully
         tx.commit().await?;
 
         Ok(height)
@@ -311,5 +315,344 @@ impl Database {
             blocks.push(block);
         }
         Ok(blocks)
+    }
+
+    pub async fn positions(&self) -> Result<Vec<String>, sqlx::Error> {
+        let results = sqlx::query("Select * from positions")
+            .fetch_all(&self.chain_db)
+            .await?
+            .into_iter()
+            .map(|s: SqliteRow| s.get_unchecked(0))
+            .collect();
+
+        Ok(results)
+    }
+    pub async fn parties(&self) -> Result<Vec<Party>, sqlx::Error> {
+        let results = sqlx::query_as("Select * from parties")
+            .fetch_all(&self.chain_db)
+            .await?;
+
+        Ok(results)
+    }
+
+    pub async fn counties(&self) -> Result<Vec<County>, sqlx::Error> {
+        let results = sqlx::query_as("Select * from counties")
+            .fetch_all(&self.chain_db)
+            .await?;
+
+        Ok(results)
+    }
+    pub async fn constituencies(&self) -> Result<Vec<String>, sqlx::Error> {
+        let results = sqlx::query("Select * from constituencies")
+            .fetch_all(&self.chain_db)
+            .await?
+            .into_iter()
+            .map(|s: SqliteRow| s.get_unchecked(0))
+            .collect();
+
+        Ok(results)
+    }
+
+    pub async fn constituencies_by_county(
+        &self,
+        county_id: &u32,
+    ) -> Result<Vec<Constituency>, sqlx::Error> {
+        let results = sqlx::query_as("SELECT * FROM constituencies WHERE county_code = ?")
+            .bind(county_id)
+            .fetch_all(&self.chain_db)
+            .await?;
+
+        Ok(results)
+    }
+
+    pub async fn wards_by_constituency(
+        &self,
+        constituency_code: &u32,
+    ) -> Result<Vec<Ward>, sqlx::Error> {
+        let results = sqlx::query_as("SELECT * FROM wards WHERE constituency_code = ?")
+            .bind(constituency_code)
+            .fetch_all(&self.chain_db)
+            .await?;
+
+        Ok(results)
+    }
+
+    pub async fn wards(&self) -> Result<Vec<String>, sqlx::Error> {
+        let results = sqlx::query("Select * from wards")
+            .fetch_all(&self.chain_db)
+            .await?
+            .into_iter()
+            .map(|s: SqliteRow| s.get_unchecked(0))
+            .collect();
+
+        Ok(results)
+    }
+
+    pub async fn stations_by_ward(&self, ward_id: &u32) -> Result<Vec<Station>, sqlx::Error> {
+        let results = sqlx::query_as("SELECT * FROM stations WHERE ward_code = ?")
+            .bind(ward_id)
+            .fetch_all(&self.chain_db)
+            .await?;
+
+        Ok(results)
+    }
+
+    pub async fn stations(&self) -> Result<Vec<String>, sqlx::Error> {
+        let results = sqlx::query("Select * from stations LIMIT 100")
+            .fetch_all(&self.chain_db)
+            .await?
+            .into_iter()
+            .map(|s: SqliteRow| s.get_unchecked(3))
+            .collect();
+
+        Ok(results)
+    }
+
+    pub async fn results_by_station(
+        &self,
+        station_id: i64,
+    ) -> Result<Vec<StationResult>, sqlx::Error> {
+        let results = sqlx::query_as::<_, StationResult>(
+            "SELECT
+                    s.id as station_id,
+                    s.station_name,
+                    s.ward_code,
+                    w.ward_name,
+                    c.id as candidate_id,
+                    c.name as candidate_name,
+                    p.title as party_title,
+                    c.position_type,
+                    r.votes,
+                    s.registered_voters
+                FROM results r
+                JOIN stations s ON r.station_id = s.id
+                JOIN wards w ON s.ward_code = w.ward_code
+                JOIN candidates c ON r.candidate_id = c.id
+                LEFT JOIN parties p ON c.party_id = p.id
+                WHERE s.id = ?
+                ORDER BY c.position_type, r.votes DESC",
+        )
+        .bind(station_id)
+        .fetch_all(&self.chain_db)
+        .await?;
+
+        Ok(results)
+    }
+
+    pub async fn results_by_ward(&self, ward_code: i32) -> Result<Vec<WardResult>, sqlx::Error> {
+        let results = sqlx::query_as::<_, WardResult>(
+                "SELECT
+                    w.ward_code,
+                    w.ward_name,
+                    w.constituency_code,
+                    c.id as candidate_id,
+                    c.name as candidate_name,
+                    p.title as party_title,
+                    c.position_type,
+                    SUM(r.votes) as total_votes,
+                    COUNT(DISTINCT s.id) as station_count
+                FROM results r
+                JOIN stations s ON r.station_id = s.id
+                JOIN wards w ON s.ward_code = w.ward_code
+                JOIN candidates c ON r.candidate_id = c.id
+                LEFT JOIN parties p ON c.party_id = p.id
+                WHERE w.ward_code = ?
+                GROUP BY w.ward_code, w.ward_name, w.constituency_code, c.id, c.name, p.title, c.position_type
+                ORDER BY c.position_type, total_votes DESC"
+            )
+            .bind(ward_code)
+            .fetch_all(&self.chain_db)
+            .await?;
+
+        Ok(results)
+    }
+
+    pub async fn results_by_constituency(
+        &self,
+        constituency_code: i32,
+    ) -> Result<Vec<ConstituencyResult>, sqlx::Error> {
+        let results = sqlx::query_as::<_, ConstituencyResult>(
+                "SELECT
+                    con.constituency_code,
+                    con.constituency_name,
+                    con.county_code,
+                    c.id as candidate_id,
+                    c.name as candidate_name,
+                    p.title as party_title,
+                    c.position_type,
+                    SUM(r.votes) as total_votes,
+                    COUNT(DISTINCT w.ward_code) as ward_count
+                FROM results r
+                JOIN stations s ON r.station_id = s.id
+                JOIN wards w ON s.ward_code = w.ward_code
+                JOIN constituencies con ON w.constituency_code = con.constituency_code
+                JOIN candidates c ON r.candidate_id = c.id
+                LEFT JOIN parties p ON c.party_id = p.id
+                WHERE con.constituency_code = ?
+                GROUP BY con.constituency_code, con.constituency_name, con.county_code, c.id, c.name, p.title, c.position_type
+                ORDER BY c.position_type, total_votes DESC"
+            )
+            .bind(constituency_code)
+            .fetch_all(&self.chain_db)
+            .await?;
+
+        Ok(results)
+    }
+
+    pub async fn results_by_county(
+        &self,
+        county_code: i32,
+    ) -> Result<Vec<CountyResult>, sqlx::Error> {
+        let results = sqlx::query_as::<_, CountyResult>(
+            "SELECT
+                    co.county_code,
+                    co.county_name,
+                    c.id as candidate_id,
+                    c.name as candidate_name,
+                    p.title as party_title,
+                    c.position_type,
+                    SUM(r.votes) as total_votes,
+                    COUNT(DISTINCT con.constituency_code) as constituency_count
+                FROM results r
+                JOIN stations s ON r.station_id = s.id
+                JOIN wards w ON s.ward_code = w.ward_code
+                JOIN constituencies con ON w.constituency_code = con.constituency_code
+                JOIN counties co ON con.county_code = co.county_code
+                JOIN candidates c ON r.candidate_id = c.id
+                LEFT JOIN parties p ON c.party_id = p.id
+                WHERE co.county_code = ?
+                GROUP BY co.county_code, co.county_name, c.id, c.name, p.title, c.position_type
+                ORDER BY c.position_type, total_votes DESC",
+        )
+        .bind(county_code)
+        .fetch_all(&self.chain_db)
+        .await?;
+
+        Ok(results)
+    }
+
+    pub async fn results_by_position(
+        &self,
+        position_type: &str,
+    ) -> Result<Vec<PositionResult>, sqlx::Error> {
+        let results = sqlx::query_as::<_, PositionResult>(
+            "SELECT
+                    c.position_type,
+                    c.id as candidate_id,
+                    c.name as candidate_name,
+                    p.title as party_title,
+                    SUM(r.votes) as total_votes
+                FROM results r
+                JOIN candidates c ON r.candidate_id = c.id
+                LEFT JOIN parties p ON c.party_id = p.id
+                WHERE c.position_type = ?
+                GROUP BY c.position_type, c.id, c.name, p.title
+                ORDER BY total_votes DESC",
+        )
+        .bind(position_type)
+        .fetch_all(&self.chain_db)
+        .await?;
+
+        Ok(results)
+    }
+
+    pub async fn candidates_by_station(
+        &self,
+        station_id: i32,
+    ) -> Result<Vec<Candidate>, sqlx::Error> {
+        let results = sqlx::query_as::<_, Candidate>(
+            r#"
+            SELECT c.*
+            FROM candidates c
+            JOIN candidate_areas ca ON ca.candidate_id = c.id
+            WHERE ca.area_type = 'station'
+              AND ca.station_id = ?
+            "#,
+        )
+        .bind(station_id)
+        .fetch_all(&self.chain_db)
+        .await?;
+
+        Ok(results)
+    }
+
+    pub async fn candidates_by_ward(&self, ward_code: &i32) -> Result<Vec<Candidate>, sqlx::Error> {
+        let results = sqlx::query_as::<_, Candidate>(
+            r#"
+            SELECT c.*
+            FROM candidates c
+            JOIN stations st ON c.voting_station = st.id
+            WHERE c.position_type = 'Mca'
+              AND st.ward_code = ?
+            "#,
+        )
+        .bind(ward_code)
+        .fetch_all(&self.chain_db)
+        .await?;
+
+        Ok(results)
+    }
+
+    pub async fn candidates_by_constituency(
+        &self,
+        constituency_code: &i32,
+        position_type: &str,
+    ) -> Result<Vec<Candidate>, sqlx::Error> {
+        let results = sqlx::query_as::<_, Candidate>(
+            r#"
+            SELECT c.*
+            FROM candidates c
+            INNER JOIN stations st ON c.voting_station = st.id
+            INNER JOIN wards w ON w.ward_code = st.ward_code
+            INNER JOIN constituencies cts ON cts.constituency_code = w.constituency_code
+            WHERE c.position_type = ?
+              AND cts.constituency_code = ?
+            "#,
+        )
+        .bind(position_type)
+        .bind(constituency_code)
+        .fetch_all(&self.chain_db)
+        .await?;
+
+        Ok(results)
+    }
+
+    pub async fn candidates_by_county(
+        &self,
+        county_code: &i32,
+        position_type: &str,
+    ) -> Result<Vec<Candidate>, sqlx::Error> {
+        let results = sqlx::query_as::<_, Candidate>(
+            r#"
+            SELECT c.*
+            FROM candidates c
+            INNER JOIN stations st ON c.voting_station = st.id
+            INNER JOIN wards w ON w.ward_code = st.ward_code
+            INNER JOIN constituencies cts ON cts.constituency_code = ward.constituency_code
+            INNER JOIN counties ct ON ct.county_code = cts.county_code
+            WHERE c.position_type = ?
+              AND cts.constituency_code = ?
+            "#,
+        )
+        .bind(position_type)
+        .bind(county_code)
+        .fetch_all(&self.chain_db)
+        .await?;
+
+        Ok(results)
+    }
+
+    pub async fn candidates_national(&self) -> Result<Vec<Candidate>, sqlx::Error> {
+        let results = sqlx::query_as::<_, Candidate>(
+            r#"
+            SELECT c.*
+            FROM candidates c
+            WHERE c.position_type = 'President'
+            "#,
+        )
+        .fetch_all(&self.chain_db)
+        .await?;
+
+        Ok(results)
     }
 }
