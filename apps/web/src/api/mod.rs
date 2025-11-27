@@ -1,4 +1,5 @@
 use types::{
+    CandidateResult,
     models::{Constituency, County, Station, Ward},
     results::Candidate,
 };
@@ -69,4 +70,14 @@ pub async fn candidates(position_type: &str, area_id: &str) -> Result<Vec<Candid
             .await
             .map_err(|e| e.to_string())?;
     Ok(res)
+}
+
+pub async fn submit(results: Vec<CandidateResult>) -> Result<(), String> {
+    gloo_net::http::Request::post(&format!("/api/v1/submit/raw"))
+        .json(&results)
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }

@@ -1,17 +1,10 @@
 use leptos::ev::SubmitEvent;
-use leptos::leptos_dom::logging::console_log;
 use leptos::prelude::*;
 use std::collections::HashMap;
+use types::CandidateResult;
 
-use crate::AppState;
 use crate::components::election_map::ElectionMap;
-
-#[derive(Clone, Debug)]
-struct Candidate {
-    id: u32,
-    name: String,
-    party: String,
-}
+use crate::{AppState, api};
 
 #[derive(Clone, Debug)]
 struct FormData {
@@ -131,7 +124,7 @@ pub fn SubmissionForm() -> impl IntoView {
         let votes = candidate_votes.get();
 
         // Build submission data
-        let submission = c
+        let results = c
             .get()
             .unwrap_or(Ok(vec![]))
             .unwrap_or_default()
@@ -141,33 +134,29 @@ pub fn SubmissionForm() -> impl IntoView {
                     .get(&(c.id as u32))
                     .and_then(|v| v.parse::<u32>().ok())
                     .unwrap_or(0);
-                format!("{} ({}): {} votes", c.name, c.party_id, vote_count)
+                CandidateResult {
+                    station_id: data.station.parse().unwrap(),
+                    votes: vote_count as i64,
+                    candidate_id: c.id as i64,
+                }
             })
             .collect::<Vec<_>>();
 
-        console_log(&format!(
-            "Submitted: Type={}, County={}, Constituency={}, Ward={}, Station={}\nVotes:\n{}",
-            data.result_type,
-            data.county,
-            data.constituency,
-            data.ward,
-            data.station,
-            submission.join("\n")
-        ));
-
-        submitted.set(true);
-
-        set_timeout(
-            move || {
-                submitted.set(false);
-                form_data.set(FormData::default());
-                candidate_votes.set(HashMap::new());
-                selected_county_id.set(String::new());
-                selected_constituency_id.set(String::new());
-                selected_ward_id.set(String::new());
-            },
-            std::time::Duration::from_secs(2),
-        );
+        leptos::task::spawn_local(async move {
+            api::submit(results).await.unwrap();
+            submitted.set(true);
+            set_timeout(
+                move || {
+                    submitted.set(false);
+                    form_data.set(FormData::default());
+                    candidate_votes.set(HashMap::new());
+                    selected_county_id.set(String::new());
+                    selected_constituency_id.set(String::new());
+                    selected_ward_id.set(String::new());
+                },
+                std::time::Duration::from_millis(500),
+            );
+        });
     };
 
     view! {

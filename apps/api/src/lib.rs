@@ -5,12 +5,46 @@ use axum::{
     routing::{get, post},
 };
 use blockchain::BlockChain;
-use types::Block;
+use serde::{Deserialize, Serialize};
+use types::{Block, CandidateResult, merkle::MerkleTree};
 
 async fn submit_result(mut blockchain: Extension<BlockChain>, result: Json<Block>) -> String {
     let block = blockchain.add_block(&result.0).await.unwrap();
     blockchain.announce_block(result.0).await.unwrap();
     format!("Block with index {} submitted successfully!", block)
+}
+
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct CandidateResult {
+//     candidate_id: u32,
+//     party_id: u32,
+//     vote_count: u32,
+// }
+
+async fn submit_raw_result(
+    mut blockchain: Extension<BlockChain>,
+    results: Json<Vec<CandidateResult>>,
+) -> String {
+    let db = &blockchain.db;
+    let height = db.get_height().await.unwrap();
+
+    assert!(results.len() > 0, "No empty results");
+    let signer = db.get_private_key().await.unwrap();
+    let prev_hash = db.get_block_by_height(height).await.unwrap().hash;
+
+    let tree = MerkleTree::from_election_results_proper(&results);
+    let root = tree.get_root_hash();
+
+    let block = Block::new(
+        &signer,
+        &prev_hash,
+        results.0,
+        (height + 1) as usize,
+        root.unwrap(),
+    );
+    let height = blockchain.add_block(&block).await.unwrap();
+    blockchain.announce_block(block).await.unwrap();
+    format!("Block with index {} submitted successfully!", height)
 }
 
 async fn block_by_height(
@@ -110,6 +144,7 @@ async fn candidates_by_position_type(
 pub fn run_api_server() -> Router {
     let router = Router::new()
         .route("/submit", post(submit_result))
+        .route("/submit/raw", post(submit_raw_result))
         .route("/block/{height}", get(block_by_height))
         .route("/positions", get(positions))
         .route("/parties", get(parties))
