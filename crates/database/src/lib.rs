@@ -718,11 +718,11 @@ impl Database {
             FROM candidates c
             INNER JOIN stations st ON c.voting_station = st.id
             INNER JOIN wards w ON w.ward_code = st.ward_code
-            INNER JOIN constituencies cts ON cts.constituency_code = ward.constituency_code
+            INNER JOIN constituencies cts ON cts.constituency_code = w.constituency_code
             INNER JOIN counties ct ON ct.county_code = cts.county_code
             JOIN parties p ON c.party_id = p.id
             WHERE c.position_type = ?
-              AND cts.constituency_code = ?
+              AND ct.county_code = ?
             "#,
         )
         .bind(position_type)

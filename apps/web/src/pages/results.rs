@@ -102,11 +102,21 @@ pub fn ResultForm() -> impl IntoView {
     let results = LocalResource::new(move || {
         let ward_id = selected_ward_id.get();
         let constituency_id = selected_constituency_id.get();
+        let county_id = selected_county_id.get();
         async move {
             match form_data.get().result_type.as_str() {
                 "Mca" if !ward_id.is_empty() => crate::api::results("Mca", &ward_id).await,
                 "Mp" if !constituency_id.is_empty() => {
                     crate::api::results("Mp", &constituency_id).await
+                }
+                "Senator" if !county_id.is_empty() => {
+                    crate::api::results("Senator", &county_id).await
+                }
+                "Governor" if !county_id.is_empty() => {
+                    crate::api::results("Governor", &county_id).await
+                }
+                "WomenRep" if !constituency_id.is_empty() => {
+                    crate::api::results("WomenRep", &constituency_id).await
                 }
                 _ => Ok(vec![]),
             }
