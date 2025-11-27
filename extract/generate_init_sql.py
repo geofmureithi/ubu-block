@@ -28,117 +28,149 @@ def is_valid_station(s: Dict[str, str]) -> bool:
     """Return True only if the station has valid essential fields."""
     ward = str(s.get("ward_code", "")).strip()
     code = str(s.get("polling_station_code", "")).strip()
-    name = str(s.get("station_name", "") or s.get("polling_station_name", "")).strip()
+    name = str(s.get("station_name") or s.get("polling_station_name") or "").strip()
 
     if not ward or not code or not name:
         return False
 
     rv = str(s.get("registered_voters", "0")).strip()
-    if not rv.isdigit():
-        return False
-
-    return True
+    return rv.isdigit()
 
 # Filter polling stations
 polling_stations = [s for s in polling_stations_raw if is_valid_station(s)]
 
-# Collect unique values
-positions = sorted({p for p in (c["position_type"] for c in candidates) if p})
-
-parties = sorted({
-    (c["party_code"], c["party_abbreviation"], c["party_abbreviation"])
-    for c in candidates
-    if c.get("party_code") and c.get("party_name")
-})
-
-counties = sorted({
-    (c["county_code"], c["county_name"])
-    for c in candidates
-    if c.get("county_code") and c.get("county_name")
-})
-
-constituencies = sorted({
-    (c["constituency_code"], c["county_code"], c["constituency_name"])
-    for c in candidates
-    if c.get("constituency_code") and c.get("county_code") and c.get("constituency_name")
-})
-
-wards = sorted({
-    (c["ward_code"], c["constituency_code"], c["ward_name"])
-    for c in candidates
-    if c.get("ward_code") and c.get("constituency_code") and c.get("ward_name")
-})
-
-# ---------------------------------------------------------
-# SQL Generation
-# ---------------------------------------------------------
-sql_lines = []
+# -------------------------------
+# Deduplicate and map IDs
+# -------------------------------
 
 # Positions
-sql_lines.append("INSERT INTO positions VALUES")
-sql_lines.append(",\n".join(f'("{sanitize_text(p)}")' for p in positions) + ";")
+positions = sorted({c["position_type"] for c in candidates if c.get("position_type")})
 
-# Parties
-sql_lines.append("\nINSERT INTO parties VALUES")
-sql_lines.append(",\n".join(
-    f'({code}, "{sanitize_text(name)}", "{sanitize_text(abbr)}")'
-    for code, name, abbr in parties
-) + ";")
+# Parties: unique + sequential integer IDs
+unique_parties = sorted({(c["party_code"], c["party_name"], c["party_abbreviation"])
+                         for c in candidates if c.get("party_code") and c.get("party_name")})
+party_id_map = {code: i+1 for i, (code, _, _) in enumerate(unique_parties)}
 
 # Counties
-sql_lines.append("\nINSERT INTO counties VALUES")
-sql_lines.append(",\n".join(
-    f'({code}, "{sanitize_text(name)}")'
-    for code, name in counties
-) + ";")
+counties = sorted({
+    (s["county_code"], s["county_name"])
+    for s in polling_stations_raw
+    if s.get("county_code") and s.get("county_name")
+})
 
 # Constituencies
-sql_lines.append("\nINSERT INTO constituencies VALUES")
-sql_lines.append(",\n".join(
-    f'({code}, {county_code}, "{sanitize_text(name)}")'
-    for code, county_code, name in constituencies
-) + ";")
+constituencies = sorted({
+    (s["constituency_code"], s["county_code"], s["constituency_name"])
+    for s in polling_stations_raw
+    if s.get("constituency_code")
+})
 
 # Wards
-sql_lines.append("\nINSERT INTO wards VALUES")
-sql_lines.append(",\n".join(
-    f'({code}, {const_code}, "{sanitize_text(name)}")'
-    for code, const_code, name in wards
-) + ";")
+wards = sorted({
+    (s["ward_code"], s["constituency_code"], s["ward_name"])
+    for s in polling_stations_raw
+    if s.get("ward_code") and s.get("constituency_code")
+})
 
-# Generate sequential IDs for stations (skip any None codes)
+# Stations: sequential IDs
 station_id_map = {}
+station_rows = []
 for i, s in enumerate(polling_stations, start=1):
     code = s.get("polling_station_code")
     if code is not None:
-        station_id_map[int(code)] = i
+        sid = i
+        station_id_map[str(code)] = sid
+        station_rows.append((
+            sid,
+            int(s["ward_code"]),
+            str(s["polling_station_code"]),
+            sanitize_text(s.get("polling_station_name") or s.get("station_name")),
+            int(s.get("registered_voters", 0))
+        ))
 
-# SQL for stations using sequential ID
-sql_lines.append("\nINSERT INTO stations VALUES")
+# -------------------------------
+# SQL Generation
+# -------------------------------
+
+sql_lines = []
+
+# Positions
+sql_lines.append("INSERT OR IGNORE INTO positions VALUES")
+sql_lines.append(",\n".join(f'("{sanitize_text(p)}")' for p in positions) + ";")
+
+# Parties
+sql_lines.append("\nINSERT OR IGNORE INTO parties VALUES")
 sql_lines.append(",\n".join(
-    f'({station_id_map[int(s["polling_station_code"])]}, '
-    f'{int(s["ward_code"])}, '
-    f'{int(s["polling_station_code"])}, '
-    f'"{sanitize_text(s.get("polling_station_name") or s.get("station_name"))}", '
-    f'{int(s.get("registered_voters", 0))})'
-    for s in polling_stations
+    f'({party_id_map[code]}, "{sanitize_text(name)}", "{sanitize_text(abbr)}")'
+    for code, name, abbr in unique_parties
 ) + ";")
 
-# Candidates referencing the mapped station ID
-sql_lines.append("\nINSERT INTO candidates VALUES")
+# Counties
+sql_lines.append("\nINSERT OR IGNORE INTO counties VALUES")
 sql_lines.append(",\n".join(
-    f'({i+1}, '
-    f'"{sanitize_text(c["name"])}", '
-    f'"{sanitize_text(c["gender"])}", '
-    f'"{sanitize_text(c.get("photo", ""))}", '
-    f'"{sanitize_text(c["position_type"])}", '
-    f'{c["party_code"]}, '
-    f'{station_id_map.get(int(c.get("voting_station")) if c.get("voting_station") is not None else None, "NULL")})'
+    f'({int(code)}, "{sanitize_text(name)}")' for code, name in counties
+) + ";")
+
+# Constituencies
+sql_lines.append("\nINSERT OR IGNORE INTO constituencies VALUES")
+sql_lines.append(",\n".join(
+    f'({int(code)}, {int(county_code)}, "{sanitize_text(name)}")' for code, county_code, name in constituencies
+) + ";")
+
+# -------------------------------
+# Wards
+# -------------------------------
+sql_lines.append("\nINSERT OR IGNORE INTO wards VALUES")
+sql_lines.append(",\n".join(
+    f'({int(code)}, {int(const_code)}, "{sanitize_text(name)}")'
+    for code, const_code, name in wards
+) + ";")
+
+# -------------------------------
+# Stations
+# -------------------------------
+station_id_map = {}
+station_rows = []
+for i, s in enumerate(polling_stations, start=1):
+    ward_code = s.get("ward_code")
+    reg_code = s.get("polling_station_code")
+    if ward_code is None or reg_code is None:
+        continue  # skip invalid
+
+    ward_code_int = int(ward_code)
+    reg_code_int = int(reg_code)
+
+    sid = i
+    station_id_map[reg_code_int] = sid
+
+    station_rows.append((
+        sid,
+        ward_code_int,           # FK must exist in wards
+        reg_code_int,            # integer
+        sanitize_text(s.get("polling_station_name") or s.get("station_name")),
+        int(s.get("registered_voters", 0))
+    ))
+
+sql_lines.append("\nINSERT OR IGNORE INTO stations VALUES")
+sql_lines.append(",\n".join(
+    f'({sid}, {ward_code}, {reg_code}, "{name}", {registered_voters})'
+    for sid, ward_code, reg_code, name, registered_voters in station_rows
+) + ";")
+
+# -------------------------------
+# Candidates
+# -------------------------------
+sql_lines.append("\nINSERT OR IGNORE INTO candidates VALUES")
+sql_lines.append(",\n".join(
+    f'({i+1}, "{sanitize_text(c["name"])}", "{sanitize_text(c["gender"])}", '
+    f'"{sanitize_text(c.get("photo",""))}", "{sanitize_text(c["position_type"])}", '
+    f'{party_id_map.get(c["party_code"], "NULL")}, '
+    f'{station_id_map.get(int(c["voting_station"]) if c.get("voting_station") else None, "NULL")})'
     for i, c in enumerate(candidates)
+    if c.get("voting_station") is None or int(c["voting_station"]) in station_id_map
 ) + ";")
 
-
-# Write to file
+# Write SQL file
 with open("init.sql", "w", encoding="utf-8") as f:
     f.write("\n".join(sql_lines))
 
