@@ -54,10 +54,7 @@ pub fn App() -> impl IntoView {
                                 view! {
                                     <>
                                         <ElectionHeader
-                                            result_type=result_type
-                                            on_result_type_change=Callback::new(move |v: String| {
-                                                result_type.set(v);
-                                            })
+
                                         />
                                         <Outlet />
                                     </>

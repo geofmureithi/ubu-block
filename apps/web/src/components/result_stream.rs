@@ -3,79 +3,8 @@ use leptos::prelude::*;
 use crate::components::result_card::{ResultCard, ResultData};
 
 #[component]
-pub fn ResultsStream(result_type: String) -> impl IntoView {
-    let results = RwSignal::new(vec![]);
-
-    // Effect: re-run whenever result_type changes
-    Effect::new(move |_| {
-        let _ = &result_type; // track dependency
-
-        // Same simulated base results
-        let base_results = vec![
-            ResultData {
-                id: 1,
-                county: "Baringo".into(),
-                leading: "David Samoei".into(),
-                percentage: 52.0,
-                opponent: "Mary Samoei".into(),
-                opponent_percentage: 48.0,
-                votes: "234,100".into(),
-                polls_centers_reporting: "95%".into(),
-            },
-            ResultData {
-                id: 2,
-                county: "Kilifi".into(),
-                leading: "John David".into(),
-                percentage: 54.0,
-                opponent: "Jane Doe".into(),
-                opponent_percentage: 46.0,
-                votes: "456,300".into(),
-                polls_centers_reporting: "88%".into(),
-            },
-            ResultData {
-                id: 3,
-                county: "Embu".into(),
-                leading: "Jane Doe".into(),
-                percentage: 51.0,
-                opponent: "John David".into(),
-                opponent_percentage: 49.0,
-                votes: "123,400".into(),
-                polls_centers_reporting: "92%".into(),
-            },
-            ResultData {
-                id: 4,
-                county: "Kakamega".into(),
-                leading: "Mark Smith".into(),
-                percentage: 55.0,
-                opponent: "Mary Smith".into(),
-                opponent_percentage: 45.0,
-                votes: "892,100".into(),
-                polls_centers_reporting: "87%".into(),
-            },
-            ResultData {
-                id: 5,
-                county: "Samburu".into(),
-                leading: "Nelly Nanyuki".into(),
-                percentage: 50.5,
-                opponent: "John David".into(),
-                opponent_percentage: 49.5,
-                votes: "456,800".into(),
-                polls_centers_reporting: "84%".into(),
-            },
-            ResultData {
-                id: 6,
-                county: "Nyeri".into(),
-                leading: "Jane Njeru".into(),
-                percentage: 51.2,
-                opponent: "John David".into(),
-                opponent_percentage: 48.8,
-                votes: "234,500".into(),
-                polls_centers_reporting: "79%".into(),
-            },
-        ];
-
-        results.set(base_results);
-    });
+pub fn ResultsStream() -> impl IntoView {
+    let results = LocalResource::new(move || async move { crate::api::live().await });
 
     view! {
         <div class="h-full overflow-y-auto">
@@ -89,6 +18,9 @@ pub fn ResultsStream(result_type: String) -> impl IntoView {
                 <div class="space-y-3">
                     <For
                         each=move || results.get()
+                            .unwrap_or(Ok(vec![]))
+                            .unwrap_or_default()
+                            .into_iter().map(|s| ResultData { id: s.candidate1_id as i32, county: s.station_name, leading: s.candidate1_name, percentage: s.candidate1_percentage as f32, opponent: s.candidate2_name.unwrap_or_default(), opponent_percentage: s.candidate2_percentage.unwrap_or_default() as f32, votes: (s.candidate1_votes + s.candidate2_votes.unwrap_or_default()).to_string(), polls_centers_reporting: 0.to_string() })
                         key=|res| res.id
                         children=move |res: ResultData| {
                             view! { <ResultCard result=res /> }
