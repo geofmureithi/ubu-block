@@ -3,3 +3,5 @@
 /apps/web/dist
 extract/.venv
 extract/services/__pycache__/
+# /apps/web/dist
+.DS_Store

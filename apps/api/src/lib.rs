@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use axum::{
     Extension, Json, Router,
     extract::Path,
@@ -5,12 +7,39 @@ use axum::{
     routing::{get, post},
 };
 use blockchain::BlockChain;
-use types::Block;
+use tower_http::services::{ServeDir, ServeFile};
+use types::{Block, CandidateResult, merkle::MerkleTree};
 
 async fn submit_result(mut blockchain: Extension<BlockChain>, result: Json<Block>) -> String {
     let block = blockchain.add_block(&result.0).await.unwrap();
     blockchain.announce_block(result.0).await.unwrap();
     format!("Block with index {} submitted successfully!", block)
+}
+
+async fn submit_raw_result(
+    mut blockchain: Extension<BlockChain>,
+    results: Json<Vec<CandidateResult>>,
+) -> String {
+    let db = &blockchain.db;
+    let height = db.get_height().await.unwrap();
+
+    assert!(results.len() > 0, "No empty results");
+    let signer = db.get_private_key().await.unwrap();
+    let prev_hash = db.get_block_by_height(height).await.unwrap().hash;
+
+    let tree = MerkleTree::from_election_results_proper(&results);
+    let root = tree.get_root_hash();
+
+    let block = Block::new(
+        &signer,
+        &prev_hash,
+        results.0,
+        (height + 1) as usize,
+        root.unwrap(),
+    );
+    let height = blockchain.add_block(&block).await.unwrap();
+    blockchain.announce_block(block).await.unwrap();
+    format!("Block with index {} submitted successfully!", height)
 }
 
 async fn block_by_height(
@@ -59,7 +88,7 @@ async fn constituencies_by_county(
     Json(constituencies)
 }
 
-async fn constituencies(blockchain: Extension<BlockChain>) -> impl IntoResponse {
+pub async fn constituencies(blockchain: Extension<BlockChain>) -> impl IntoResponse {
     let db = &blockchain.db;
 
     let constituencies = db.constituencies().await.unwrap();
@@ -107,9 +136,39 @@ async fn candidates_by_position_type(
     Json(res)
 }
 
+async fn candidates_by_result(
+    blockchain: Extension<BlockChain>,
+    Path((position_type, area_id)): Path<(String, i32)>,
+) -> impl IntoResponse {
+    let db = &blockchain.db;
+
+    let res = match position_type.as_str() {
+        "Mca" => db.results_by_ward(&area_id).await.unwrap(),
+        "Governor" => db.results_by_county(&area_id, "Governor").await.unwrap(),
+        "Senator" => db.results_by_county(&area_id, "Senator").await.unwrap(),
+        "Mp" => db.results_by_constituency(&area_id, "Mp").await.unwrap(),
+        "WomenRep" => db
+            .results_by_constituency(&area_id, "WomenRep")
+            .await
+            .unwrap(),
+        _ => vec![],
+    };
+
+    Json(res)
+}
+
+async fn live(blockchain: Extension<BlockChain>) -> impl IntoResponse {
+    let db = &blockchain.db;
+
+    let res = db.last_five_results().await.unwrap();
+
+    Json(res)
+}
+
 pub fn run_api_server() -> Router {
     let router = Router::new()
         .route("/submit", post(submit_result))
+        .route("/submit/raw", post(submit_raw_result))
         .route("/block/{height}", get(block_by_height))
         .route("/positions", get(positions))
         .route("/parties", get(parties))
@@ -126,6 +185,29 @@ pub fn run_api_server() -> Router {
         .route(
             "/candidates/{position_type}/{area_id}",
             get(candidates_by_position_type),
-        );
+        )
+        .route(
+            "/candidates/{position_type}/{area_id}/results",
+            get(candidates_by_result),
+        )
+        .route("/live", get(live));
     router
+}
+
+fn workspace_dir() -> PathBuf {
+    let output = std::process::Command::new(env!("CARGO"))
+        .arg("locate-project")
+        .arg("--workspace")
+        .arg("--message-format=plain")
+        .output()
+        .unwrap()
+        .stdout;
+    let cargo_path = std::path::Path::new(std::str::from_utf8(&output).unwrap().trim());
+    cargo_path.parent().unwrap().to_path_buf()
+}
+
+pub fn ui_handler() -> ServeDir<tower_http::set_status::SetStatus<ServeFile>> {
+    ServeDir::new(workspace_dir().join("apps/web/dist")).not_found_service(ServeFile::new(
+        workspace_dir().join("apps/web/dist/index.html"),
+    ))
 }

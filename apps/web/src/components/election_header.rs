@@ -4,10 +4,7 @@ use leptos_router::components::A;
 use crate::AppState;
 
 #[component]
-pub fn ElectionHeader(
-    #[prop(into)] result_type: RwSignal<String>,
-    on_result_type_change: Callback<String>,
-) -> impl IntoView {
+pub fn ElectionHeader() -> impl IntoView {
     let app_data = use_context::<AppState>().unwrap();
     let result_types = app_data.positions;
 
@@ -39,7 +36,7 @@ pub fn ElectionHeader(
                             .into_iter()
                             .map(|id| {
                                 let _id = id.clone();
-                                let is_selected = move || result_type.get() == _id;
+                                let is_selected = move || false;
                                 let variant_classes = move || {
                                     if is_selected() {
                                         "bg-primary text-primary-foreground hover:bg-primary/90"
@@ -49,19 +46,17 @@ pub fn ElectionHeader(
                                 };
 
                                 view! {
-                                    <button
-                                        class=move || {
+                                    <A
+                                        href="/results"
+                                        attr:class=move || {
                                             format!(
                                                 "px-3 py-1 rounded border text-sm {}",
                                                 variant_classes(),
                                             )
                                         }
-                                        on:click=move |_| {
-                                            on_result_type_change.run(id.to_string());
-                                        }
                                     >
                                         {id.clone()}
-                                    </button>
+                                    </A>
                                 }
                             })
                             .collect::<Vec<_>>()}

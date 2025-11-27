@@ -381,7 +381,7 @@ impl BlockChain {
     async fn handle_blocks_response(&mut self, blocks: Vec<Block>) -> Result<(), ChainError> {
         log::debug!("Received {} blocks for sync", blocks.len());
         for block in blocks {
-            self.add_block_to_chain(block).await; // TODO: handle multiple similar blocks
+            let _ = self.add_block_to_chain(block).await; // TODO: handle multiple similar blocks
         }
         Ok(())
     }
@@ -563,14 +563,14 @@ impl BlockChain {
     }
 
     async fn add_block_to_chain(&mut self, block: Block) -> Result<i64, ChainError> {
-        self.db
-            .add_public_key(
-                block.creator_pub_key.as_bytes(),
-                &block.creator,
-                &block.signature_pub_key_hash,
-                block.height as i32,
-            )
-            .await;
+        // self.db
+        //     .add_public_key(
+        //         block.creator_pub_key.as_bytes(),
+        //         &block.creator,
+        //         &block.signature_pub_key_hash,
+        //         block.height as i32,
+        //     )
+        //     .await;
         let res = self.db.add_block(&block).await?;
         Ok(res)
     }

@@ -6,9 +6,7 @@ use p256::ecdsa::{Signature, SigningKey, VerifyingKey, signature::Verifier};
 use types::{
     Block, ElectionBlockHeader, PubKey,
     models::{Constituency, County, Party, Station, Ward},
-    results::{
-        Candidate, ConstituencyResult, CountyResult, PositionResult, StationResult, WardResult,
-    },
+    results::{Candidate, GeneralResult, LastResultSummary},
 };
 
 pub const PRIV_SETUP: &str = include_str!("../sql/private_db.sql");
@@ -411,147 +409,236 @@ impl Database {
     pub async fn results_by_station(
         &self,
         station_id: i64,
-    ) -> Result<Vec<StationResult>, sqlx::Error> {
-        let results = sqlx::query_as::<_, StationResult>(
-            "SELECT
-                    s.id as station_id,
-                    s.station_name,
-                    s.ward_code,
-                    w.ward_name,
-                    c.id as candidate_id,
-                    c.name as candidate_name,
-                    p.title as party_title,
-                    c.position_type,
-                    r.votes,
-                    s.registered_voters
+    ) -> Result<Vec<GeneralResult>, sqlx::Error> {
+        let results = sqlx::query_as::<_, GeneralResult>(
+            "WITH per_candidate AS (
+                SELECT
+                    c.id AS candidate_id,
+                    c.name AS candidate_name,
+                    COALESCE(p.title, 'Independent') AS party_title,
+                    CAST(AVG(r.votes) AS INTEGER) AS votes,
+                    AVG(r.votes * r.votes) AS sq_votes,
+                    AVG(r.votes) AS avg_votes
                 FROM results r
                 JOIN stations s ON r.station_id = s.id
-                JOIN wards w ON s.ward_code = w.ward_code
                 JOIN candidates c ON r.candidate_id = c.id
                 LEFT JOIN parties p ON c.party_id = p.id
                 WHERE s.id = ?
-                ORDER BY c.position_type, r.votes DESC",
+                GROUP BY c.id
+            )
+            SELECT
+                candidate_id,
+                candidate_name,
+                party_title,
+                votes,
+                CAST(CASE
+                    WHEN sq_votes - (avg_votes * avg_votes) > 0
+                    THEN (sq_votes - (avg_votes * avg_votes))
+                    ELSE 0
+                END AS INTEGER) AS sd
+            FROM per_candidate
+            ORDER BY votes DESC;
+            ",
         )
         .bind(station_id)
         .fetch_all(&self.chain_db)
         .await?;
 
+        // Calculate square root in Rust
+        let results: Vec<GeneralResult> = results
+            .into_iter()
+            .map(|mut r| {
+                r.sd = (r.sd as f64).sqrt() as u32;
+                r
+            })
+            .collect();
+
         Ok(results)
     }
 
-    pub async fn results_by_ward(&self, ward_code: i32) -> Result<Vec<WardResult>, sqlx::Error> {
-        let results = sqlx::query_as::<_, WardResult>(
-                "SELECT
-                    w.ward_code,
-                    w.ward_name,
-                    w.constituency_code,
-                    c.id as candidate_id,
-                    c.name as candidate_name,
-                    p.title as party_title,
-                    c.position_type,
-                    SUM(r.votes) as total_votes,
-                    COUNT(DISTINCT s.id) as station_count
-                FROM results r
-                JOIN stations s ON r.station_id = s.id
-                JOIN wards w ON s.ward_code = w.ward_code
-                JOIN candidates c ON r.candidate_id = c.id
-                LEFT JOIN parties p ON c.party_id = p.id
-                WHERE w.ward_code = ?
-                GROUP BY w.ward_code, w.ward_name, w.constituency_code, c.id, c.name, p.title, c.position_type
-                ORDER BY c.position_type, total_votes DESC"
+    pub async fn results_by_ward(
+        &self,
+        ward_code: &i32,
+    ) -> Result<Vec<GeneralResult>, sqlx::Error> {
+        let results = sqlx::query_as::<_, GeneralResult>(
+                "WITH station_candidate_agg AS (
+                    SELECT
+                        s.id AS station_id,
+                        c.id AS candidate_id,
+                        AVG(r.votes) AS avg_votes,
+                        AVG(r.votes * r.votes) AS avg_sq_votes
+                    FROM results r
+                    JOIN stations s ON r.station_id = s.id
+                    JOIN candidates c ON r.candidate_id = c.id
+                    JOIN wards w ON s.ward_code = w.ward_code
+                    WHERE w.ward_code = ?
+                    GROUP BY s.id, c.id
+                ),
+                candidate_summary AS (
+                    SELECT
+                        candidate_id,
+                        SUM(avg_votes) AS votes,
+                        AVG(avg_sq_votes) AS avg_sq_votes,
+                        AVG(avg_votes) AS overall_avg_votes,
+                        COUNT(*) AS station_count
+                    FROM station_candidate_agg
+                    GROUP BY candidate_id
+                )
+                SELECT
+                    c.id AS candidate_id,
+                    c.name AS candidate_name,
+                    COALESCE(p.title, 'Independent') AS party_title,
+                    CAST(candidate_summary.votes AS INTEGER) AS votes,
+                    CAST(CASE
+                        WHEN station_count > 1 AND (avg_sq_votes - (overall_avg_votes * overall_avg_votes)) > 0
+                        THEN (avg_sq_votes - (overall_avg_votes * overall_avg_votes))
+                        ELSE 0
+                    END AS INTEGER) AS sd
+                FROM candidate_summary
+                JOIN candidates c ON c.id = candidate_summary.candidate_id
+                LEFT JOIN parties p ON p.id = c.party_id
+                ORDER BY candidate_summary.votes DESC;
+                "
             )
             .bind(ward_code)
             .fetch_all(&self.chain_db)
             .await?;
+
+        // Calculate square root in Rust
+        let results: Vec<GeneralResult> = results
+            .into_iter()
+            .map(|mut r| {
+                r.sd = (r.sd as f64).sqrt() as u32;
+                r
+            })
+            .collect();
 
         Ok(results)
     }
 
     pub async fn results_by_constituency(
         &self,
-        constituency_code: i32,
-    ) -> Result<Vec<ConstituencyResult>, sqlx::Error> {
-        let results = sqlx::query_as::<_, ConstituencyResult>(
-                "SELECT
-                    con.constituency_code,
-                    con.constituency_name,
-                    con.county_code,
-                    c.id as candidate_id,
-                    c.name as candidate_name,
-                    p.title as party_title,
-                    c.position_type,
-                    SUM(r.votes) as total_votes,
-                    COUNT(DISTINCT w.ward_code) as ward_count
-                FROM results r
-                JOIN stations s ON r.station_id = s.id
-                JOIN wards w ON s.ward_code = w.ward_code
-                JOIN constituencies con ON w.constituency_code = con.constituency_code
-                JOIN candidates c ON r.candidate_id = c.id
-                LEFT JOIN parties p ON c.party_id = p.id
-                WHERE con.constituency_code = ?
-                GROUP BY con.constituency_code, con.constituency_name, con.county_code, c.id, c.name, p.title, c.position_type
-                ORDER BY c.position_type, total_votes DESC"
-            )
-            .bind(constituency_code)
-            .fetch_all(&self.chain_db)
-            .await?;
+        constituency_code: &i32,
+        position_type: &str,
+    ) -> Result<Vec<GeneralResult>, sqlx::Error> {
+        let results = sqlx::query_as::<_, GeneralResult>(
+            "WITH station_candidate_agg AS (
+                    SELECT
+                        s.id AS station_id,
+                        c.id AS candidate_id,
+                        AVG(r.votes) AS avg_votes,
+                        AVG(r.votes * r.votes) AS avg_sq_votes
+                    FROM results r
+                    JOIN stations s ON r.station_id = s.id
+                    JOIN wards w ON s.ward_code = w.ward_code
+                    JOIN constituencies con ON w.constituency_code = con.constituency_code
+                    JOIN candidates c ON r.candidate_id = c.id
+                    WHERE con.constituency_code = ? AND c.position_type = ?
+                    GROUP BY s.id, c.id
+                ),
+                candidate_summary AS (
+                    SELECT
+                        candidate_id,
+                        SUM(avg_votes) AS total_votes,
+                        AVG(avg_sq_votes) AS avg_sq_votes,
+                        AVG(avg_votes) AS overall_avg_votes,
+                        COUNT(*) AS station_count
+                    FROM station_candidate_agg
+                    GROUP BY candidate_id
+                )
+                SELECT
+                    c.id AS candidate_id,
+                    c.name AS candidate_name,
+                    COALESCE(p.title, 'Independent') AS party_title,
+                    CAST(cs.total_votes AS INTEGER) AS votes,
+                    CAST(CASE
+                        WHEN station_count > 1 AND (avg_sq_votes - (overall_avg_votes * overall_avg_votes)) > 0
+                        THEN (avg_sq_votes - (overall_avg_votes * overall_avg_votes))
+                        ELSE 0
+                    END AS INTEGER) AS sd
+                FROM candidate_summary cs
+                JOIN candidates c ON c.id = cs.candidate_id
+                LEFT JOIN parties p ON p.id = c.party_id
+                ORDER BY cs.total_votes DESC;
+                ",
+        )
+        .bind(constituency_code)
+        .bind(position_type)
+        .fetch_all(&self.chain_db)
+        .await?;
+
+        // Calculate square root in Rust
+        let results: Vec<GeneralResult> = results
+            .into_iter()
+            .map(|mut r| {
+                r.sd = (r.sd as f64).sqrt() as u32;
+                r
+            })
+            .collect();
 
         Ok(results)
     }
 
     pub async fn results_by_county(
         &self,
-        county_code: i32,
-    ) -> Result<Vec<CountyResult>, sqlx::Error> {
-        let results = sqlx::query_as::<_, CountyResult>(
-            "SELECT
-                    co.county_code,
-                    co.county_name,
-                    c.id as candidate_id,
-                    c.name as candidate_name,
-                    p.title as party_title,
-                    c.position_type,
-                    SUM(r.votes) as total_votes,
-                    COUNT(DISTINCT con.constituency_code) as constituency_count
+        county_code: &i32,
+        position_type: &str,
+    ) -> Result<Vec<GeneralResult>, sqlx::Error> {
+        let results = sqlx::query_as::<_, GeneralResult>(
+            "WITH station_candidate_agg AS (
+                SELECT
+                    s.id AS station_id,
+                    c.id AS candidate_id,
+                    AVG(r.votes) AS avg_votes,
+                    AVG(r.votes * r.votes) AS avg_sq_votes
                 FROM results r
                 JOIN stations s ON r.station_id = s.id
                 JOIN wards w ON s.ward_code = w.ward_code
                 JOIN constituencies con ON w.constituency_code = con.constituency_code
                 JOIN counties co ON con.county_code = co.county_code
                 JOIN candidates c ON r.candidate_id = c.id
-                LEFT JOIN parties p ON c.party_id = p.id
-                WHERE co.county_code = ?
-                GROUP BY co.county_code, co.county_name, c.id, c.name, p.title, c.position_type
-                ORDER BY c.position_type, total_votes DESC",
+                WHERE co.county_code = ? AND c.position_type = ?
+                GROUP BY s.id, c.id
+            ),
+            candidate_summary AS (
+                SELECT
+                    candidate_id,
+                    SUM(avg_votes) AS total_votes,
+                    AVG(avg_sq_votes) AS avg_sq_votes,
+                    AVG(avg_votes) AS overall_avg_votes,
+                    COUNT(*) AS station_count
+                FROM station_candidate_agg
+                GROUP BY candidate_id
+            )
+            SELECT
+                c.id AS candidate_id,
+                c.name AS candidate_name,
+                COALESCE(p.title, 'Independent') AS party_title,
+                CAST(cs.total_votes AS INTEGER) AS votes,
+                CAST(CASE
+                    WHEN station_count > 1 AND (avg_sq_votes - (overall_avg_votes * overall_avg_votes)) > 0
+                    THEN (avg_sq_votes - (overall_avg_votes * overall_avg_votes))
+                    ELSE 0
+                END AS INTEGER) AS sd
+            FROM candidate_summary cs
+            JOIN candidates c ON c.id = cs.candidate_id
+            LEFT JOIN parties p ON c.party_id = p.id
+            ORDER BY cs.total_votes DESC;
+            ",
         )
         .bind(county_code)
-        .fetch_all(&self.chain_db)
-        .await?;
-
-        Ok(results)
-    }
-
-    pub async fn results_by_position(
-        &self,
-        position_type: &str,
-    ) -> Result<Vec<PositionResult>, sqlx::Error> {
-        let results = sqlx::query_as::<_, PositionResult>(
-            "SELECT
-                    c.position_type,
-                    c.id as candidate_id,
-                    c.name as candidate_name,
-                    p.title as party_title,
-                    SUM(r.votes) as total_votes
-                FROM results r
-                JOIN candidates c ON r.candidate_id = c.id
-                LEFT JOIN parties p ON c.party_id = p.id
-                WHERE c.position_type = ?
-                GROUP BY c.position_type, c.id, c.name, p.title
-                ORDER BY total_votes DESC",
-        )
         .bind(position_type)
         .fetch_all(&self.chain_db)
         .await?;
+
+        // Calculate square root in Rust
+        let results: Vec<GeneralResult> = results
+            .into_iter()
+            .map(|mut r| {
+                r.sd = (r.sd as f64).sqrt() as u32;
+                r
+            })
+            .collect();
 
         Ok(results)
     }
@@ -652,6 +739,116 @@ impl Database {
         )
         .fetch_all(&self.chain_db)
         .await?;
+
+        Ok(results)
+    }
+    pub async fn last_five_results(&self) -> Result<Vec<LastResultSummary>, sqlx::Error> {
+        let mut results = sqlx::query_as::<_, LastResultSummary>(
+            "WITH latest_stations AS (
+                SELECT DISTINCT station_id
+                FROM results
+                ORDER BY station_id DESC
+                LIMIT 5
+            ),
+            station_candidate_votes AS (
+                SELECT
+                    s.id AS station_id,
+                    s.station_name,
+                    c.id AS candidate_id,
+                    c.name AS candidate_name,
+                    COALESCE(p.title, 'Independent') AS party_title,
+                    c.position_type,
+                    r.votes
+                FROM results r
+                JOIN stations s ON r.station_id = s.id
+                JOIN candidates c ON r.candidate_id = c.id
+                LEFT JOIN parties p ON c.party_id = p.id
+                WHERE s.id IN (SELECT station_id FROM latest_stations)
+            ),
+            station_candidate_agg AS (
+                SELECT
+                    station_id,
+                    station_name,
+                    candidate_id,
+                    candidate_name,
+                    party_title,
+                    position_type,
+                    AVG(votes) AS avg_votes,
+                    AVG(votes * votes) AS avg_sq_votes
+                FROM station_candidate_votes
+                GROUP BY station_id, candidate_id
+            ),
+            station_totals AS (
+                SELECT
+                    station_id,
+                    position_type,
+                    SUM(avg_votes) AS total_votes
+                FROM station_candidate_agg
+                GROUP BY station_id, position_type
+            ),
+            station_sd AS (
+                SELECT
+                    station_id,
+                    position_type,
+                    CAST(CASE
+                        WHEN COUNT(*) > 1 AND (AVG(avg_sq_votes) - AVG(avg_votes) * AVG(avg_votes)) > 0
+                        THEN (AVG(avg_sq_votes) - AVG(avg_votes) * AVG(avg_votes))
+                        ELSE 0
+                    END AS INTEGER) AS sd_squared
+                FROM station_candidate_agg
+                GROUP BY station_id, position_type
+            ),
+            ranked_candidates AS (
+                SELECT
+                    sca.station_id,
+                    sca.station_name,
+                    sca.candidate_id,
+                    sca.candidate_name,
+                    sca.party_title,
+                    sca.position_type,
+                    CAST(sca.avg_votes AS INTEGER) AS votes,
+                    (sca.avg_votes * 100.0 / st.total_votes) AS percentage,
+                    ROW_NUMBER() OVER (PARTITION BY sca.station_id, sca.position_type ORDER BY sca.avg_votes DESC) AS rank
+                FROM station_candidate_agg sca
+                JOIN station_totals st ON sca.station_id = st.station_id AND sca.position_type = st.position_type
+            ),
+            final_results AS (
+                SELECT
+                    rc1.position_type,
+                    rc1.station_id,
+                    rc1.station_name,
+                    rc1.candidate_id AS candidate1_id,
+                    rc1.candidate_name AS candidate1_name,
+                    rc1.party_title AS candidate1_party,
+                    rc1.votes AS candidate1_votes,
+                    rc1.percentage AS candidate1_percentage,
+                    rc2.candidate_id AS candidate2_id,
+                    rc2.candidate_name AS candidate2_name,
+                    rc2.party_title AS candidate2_party,
+                    rc2.votes AS candidate2_votes,
+                    rc2.percentage AS candidate2_percentage,
+                    sd.sd_squared AS sd
+                FROM ranked_candidates rc1
+                LEFT JOIN ranked_candidates rc2
+                    ON rc1.station_id = rc2.station_id
+                    AND rc1.position_type = rc2.position_type
+                    AND rc2.rank = 2
+                JOIN station_sd sd
+                    ON rc1.station_id = sd.station_id
+                    AND rc1.position_type = sd.position_type
+                WHERE rc1.rank = 1
+            )
+            SELECT * FROM final_results
+            ORDER BY station_id DESC, position_type;
+            "
+        )
+        .fetch_all(&self.chain_db)
+        .await?;
+
+        // Calculate square root for SD in Rust
+        for result in &mut results {
+            result.sd = (result.sd as f64).sqrt() as u32;
+        }
 
         Ok(results)
     }

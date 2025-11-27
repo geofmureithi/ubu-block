@@ -3,57 +3,14 @@ use leptos::prelude::*;
 use crate::components::kenyan_map::KenyanMap;
 
 #[component]
-pub fn ElectionMap(result_type: String) -> impl IntoView {
-    // Equivalent to the useMemo constant in React
-    let map_data = vec![
-        MapState {
-            county: "Baringo",
-            leading: "David Samoei",
-            votes: 234_100,
-            color: "from-blue-500",
-        },
-        MapState {
-            county: "Kilifi",
-            leading: "John David",
-            votes: 456_300,
-            color: "from-red-500",
-        },
-        MapState {
-            county: "Embu",
-            leading: "Jane Doe",
-            votes: 123_400,
-            color: "from-blue-500",
-        },
-        MapState {
-            county: "Kakamega",
-            leading: "Mark Smith",
-            votes: 892_100,
-            color: "from-red-500",
-        },
-        MapState {
-            county: "Samburu",
-            leading: "Nelly Nanyuki",
-            votes: 456_800,
-            color: "from-blue-500",
-        },
-    ];
-
-    // Helper to format the header text (capitalize first letter)
-    let formatted_type = {
-        let mut chars = result_type.chars();
-        match chars.next() {
-            Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
-            None => result_type.clone(),
-        }
-    };
+pub fn ElectionMap() -> impl IntoView {
+    let map_data: Vec<MapState> = vec![];
 
     view! {
         <div class="h-full w-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-card via-background to-card">
             <div class="w-full h-full flex flex-col items-center justify-center gap-8">
 
                 <KenyanMap />
-
-                // Top Results Summary
                 <div class="grid grid-cols-2 gap-4 w-full">
                     {map_data
                         .iter()
@@ -91,10 +48,10 @@ pub fn ElectionMap(result_type: String) -> impl IntoView {
                 // Footer text
                 <div class="text-center mt-1">
                     <p class="text-sm text-muted-foreground">
-                        {format!("Viewing {} Results", formatted_type)}
+                        {format!("Interactive Results")}
                     </p>
                     <p class="text-xs text-muted-foreground mt-1">
-                        "Interactive map updates in real-time"
+                        "Interactive map updates. Last updated Yesterday"
                     </p>
                 </div>
             </div>
