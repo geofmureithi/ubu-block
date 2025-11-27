@@ -42,7 +42,7 @@ pub struct Ward {
 pub struct Station {
     pub id: i64,
     pub ward_code: i32,
-    pub reg_center_code: Option<i32>,
+    // pub reg_center_code: Option<String>,
     pub station_name: Option<String>,
     pub registered_voters: Option<i32>,
 }

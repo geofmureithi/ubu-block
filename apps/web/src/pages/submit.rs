@@ -32,7 +32,7 @@ pub fn SubmissionPage() -> impl IntoView {
     // let result_type = use_context::<AppState>().map(|s| s.result_type).unwrap();
     view! {
         <>
-            <div class="flex flex-1 overflow-hidden flex-col md:flex-row">
+            <div class="flex flex-1 flex-col md:flex-row">
 
                 <div class="w-full md:w-1/2 border-r-0 md:border-r border-border bg-card">
                     <ElectionMap/>
@@ -369,7 +369,7 @@ pub fn SubmissionForm() -> impl IntoView {
                                                     {candidate.name.clone()}
                                                 </td>
                                                 <td class="px-4 py-3 text-sm text-gray-900">
-                                                    {candidate.party_id.clone()}
+                                                    {candidate.party_name.clone()}
                                                 </td>
                                                 <td class="px-4 py-3">
                                                     <input

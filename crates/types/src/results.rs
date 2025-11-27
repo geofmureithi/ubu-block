@@ -107,8 +107,9 @@ pub struct Candidate {
     pub gender: String,
     pub photo: Option<String>,
     pub position_type: String,
-    pub party_id: i32,
+    pub party_name: String,
 }
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(sqlx::FromRow))]
