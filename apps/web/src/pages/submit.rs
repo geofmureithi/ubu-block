@@ -29,13 +29,13 @@ impl Default for FormData {
 
 #[component]
 pub fn SubmissionPage() -> impl IntoView {
-    let result_type = use_context::<AppState>().map(|s| s.result_type).unwrap();
+    // let result_type = use_context::<AppState>().map(|s| s.result_type).unwrap();
     view! {
         <>
             <div class="flex flex-1 overflow-hidden flex-col md:flex-row">
 
                 <div class="w-full md:w-1/2 border-r-0 md:border-r border-border bg-card">
-                    <ElectionMap result_type=result_type.get() />
+                    <ElectionMap/>
                 </div>
                 <div class="hidden md:block w-full md:w-1/2 bg-background">
                     <div class="p-6 space-y-4">

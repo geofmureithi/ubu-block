@@ -109,3 +109,33 @@ pub struct Candidate {
     pub position_type: String,
     pub party_id: i32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(sqlx::FromRow))]
+pub struct GeneralResult {
+    pub candidate_id: u32,
+    pub candidate_name: String,
+    pub party_title: String,
+    pub votes: u32,
+    /// Standard deviation
+    pub sd: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(sqlx::FromRow))]
+pub struct LastResultSummary {
+    pub position_type: String,
+    pub station_id: i64,
+    pub station_name: String,
+    pub candidate1_id: u32,
+    pub candidate1_name: String,
+    pub candidate1_party: String,
+    pub candidate1_votes: u32,
+    pub candidate1_percentage: f64,
+    pub candidate2_id: Option<u32>,
+    pub candidate2_name: Option<String>,
+    pub candidate2_party: Option<String>,
+    pub candidate2_votes: Option<u32>,
+    pub candidate2_percentage: Option<f64>,
+    pub sd: u32,
+}

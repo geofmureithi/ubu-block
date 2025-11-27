@@ -1,7 +1,7 @@
 use types::{
     CandidateResult,
     models::{Constituency, County, Station, Ward},
-    results::Candidate,
+    results::{Candidate, GeneralResult, LastResultSummary},
 };
 
 pub async fn positions() -> Result<Vec<String>, String> {
@@ -69,6 +69,30 @@ pub async fn candidates(position_type: &str, area_id: &str) -> Result<Vec<Candid
             .json()
             .await
             .map_err(|e| e.to_string())?;
+    Ok(res)
+}
+
+pub async fn results(position_type: &str, area_id: &str) -> Result<Vec<GeneralResult>, String> {
+    let res = gloo_net::http::Request::get(&format!(
+        "/api/v1/candidates/{position_type}/{area_id}/results"
+    ))
+    .send()
+    .await
+    .map_err(|e| e.to_string())?
+    .json()
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(res)
+}
+
+pub async fn live() -> Result<Vec<LastResultSummary>, String> {
+    let res = gloo_net::http::Request::get(&format!("/api/v1/live"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(res)
 }
 

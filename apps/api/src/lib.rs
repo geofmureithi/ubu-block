@@ -134,6 +134,35 @@ async fn candidates_by_position_type(
     Json(res)
 }
 
+async fn candidates_by_result(
+    blockchain: Extension<BlockChain>,
+    Path((position_type, area_id)): Path<(String, i32)>,
+) -> impl IntoResponse {
+    let db = &blockchain.db;
+
+    let res = match position_type.as_str() {
+        "Mca" => db.results_by_ward(&area_id).await.unwrap(),
+        "Governor" => db.results_by_county(&area_id, "Governor").await.unwrap(),
+        "Senator" => db.results_by_county(&area_id, "Senator").await.unwrap(),
+        "Mp" => db.results_by_constituency(&area_id, "Mp").await.unwrap(),
+        "WomenRep" => db
+            .results_by_constituency(&area_id, "WomenRep")
+            .await
+            .unwrap(),
+        _ => vec![],
+    };
+
+    Json(res)
+}
+
+async fn live(blockchain: Extension<BlockChain>) -> impl IntoResponse {
+    let db = &blockchain.db;
+
+    let res = db.last_five_results().await.unwrap();
+
+    Json(res)
+}
+
 pub fn run_api_server() -> Router {
     let router = Router::new()
         .route("/submit", post(submit_result))
@@ -154,6 +183,11 @@ pub fn run_api_server() -> Router {
         .route(
             "/candidates/{position_type}/{area_id}",
             get(candidates_by_position_type),
-        );
+        )
+        .route(
+            "/candidates/{position_type}/{area_id}/results",
+            get(candidates_by_result),
+        )
+        .route("/live", get(live));
     router
 }
