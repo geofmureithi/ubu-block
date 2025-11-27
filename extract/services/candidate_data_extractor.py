@@ -4,6 +4,92 @@ import pandas as pd
 from typing import Dict,List
 from services.shared_utils import extract_number_and_text
 
+# Global polling station index (loaded once)
+POLLING_INDEX = {
+    "by_ward": {},
+    "by_constituency": {},
+    "by_county": {},
+}
+
+def load_polling_index(polling_stations: List[Dict]):
+    """
+    Build fast-lookup indices to pick canonical polling stations.
+    """
+    from collections import defaultdict
+
+    by_ward = defaultdict(list)
+    by_constituency = defaultdict(list)
+    by_county = defaultdict(list)
+
+    for s in polling_stations:
+        by_ward[s.get("ward_code")].append(s)
+        by_constituency[s.get("constituency_code")].append(s)
+        by_county[s.get("county_code")].append(s)
+
+    POLLING_INDEX["by_ward"] = by_ward
+    POLLING_INDEX["by_constituency"] = by_constituency
+    POLLING_INDEX["by_county"] = by_county
+
+def pick_canonical_station(candidate):
+    """
+    Select a representative polling station based on candidate level.
+    Primary lookup by code; fallback by normalized name if code fails.
+    Returns a single station dict or None.
+    """
+    pos = candidate["position_type"]
+
+    ward_code = candidate.get("ward_code")
+    const_code = candidate.get("constituency_code")
+    county_code = candidate.get("county_code")
+
+    ward_name = candidate.get("ward_name", "")
+    const_name = candidate.get("constituency_name", "")
+    county_name = candidate.get("county_name", "")
+
+    # Helper to normalize names
+    def normalize_name(name: str) -> str:
+        return str(name).lower().replace(" constituency", "").replace(".", "").strip()
+
+    stations = []
+
+    # MCA → ward-level lookup
+    if pos == "Member of County Assembly" and ward_code:
+        stations = POLLING_INDEX["by_ward"].get(ward_code, [])
+        if not stations and ward_name:
+            # fallback by name
+            for s_list in POLLING_INDEX["by_ward"].values():
+                for station in s_list:
+                    if normalize_name(station["ward_name"]) == normalize_name(ward_name):
+                        stations.append(station)
+
+    # MP → constituency-level lookup
+    elif pos == "Member of Parliament" and const_code:
+        stations = POLLING_INDEX["by_constituency"].get(const_code, [])
+        if not stations and const_name:
+            # fallback by name
+            for s_list in POLLING_INDEX["by_constituency"].values():
+                for station in s_list:
+                    if normalize_name(station["constituency_name"]) == normalize_name(const_name):
+                        stations.append(station)
+
+    # Senator / Governor / Women Rep → county-level lookup
+    elif pos in ["Senator", "Governor", "Women Rep"] and county_code:
+        stations = POLLING_INDEX["by_county"].get(county_code, [])
+        if not stations and county_name:
+            # fallback by name
+            for s_list in POLLING_INDEX["by_county"].values():
+                for station in s_list:
+                    if normalize_name(station["county_name"]) == normalize_name(county_name):
+                        stations.append(station)
+
+    # ultimate fallback → pick any county-level station
+    else:
+        stations = POLLING_INDEX["by_county"].get(county_code, [])
+
+    # return first station dict or None
+    return stations[0] if stations else None
+
+
 def fix_inline_spaces(text: str) -> str:
     if not isinstance(text, str):
         return text
@@ -47,7 +133,7 @@ def load_and_normalize_table(df: pd.DataFrame) -> pd.DataFrame:
 
     # fix the country code county issue
     if 'County Code County' in df.columns:
-        df = df.rename(columns={'County Code County': 'County', '': 'County Code'})
+        df = df.rename(columns={'County Code County': 'County Code', '': 'County'})
 
     # Rename columns to stable snake_case names
     rename_map = {
@@ -95,6 +181,7 @@ def build_candidate_record(row, position_type):
     county_code = safe_get(row, ["county_code"])
     county_name = safe_get(row, ["county_name"])
 
+
     constituency_code = safe_get(row, ["constituency_code"])
     constituency_name = safe_get(row, ["constituency_name"])
 
@@ -113,7 +200,7 @@ def build_candidate_record(row, position_type):
             ward_code = num
             ward_name = text
 
-    return {
+    record =  {
         "name": full_name,
         "gender": "unknown",              # not provided in PDF
         "photo": photo,                   # always empty in PDF
@@ -133,6 +220,11 @@ def build_candidate_record(row, position_type):
         "ward_name": fix_inline_spaces(ward_name),
     }
 
+    station = pick_canonical_station(record)
+    record["voting_station"] = (
+        station.get('polling_station_code') if station else None
+    )
+    return record
 def get_position_type_from_columns(df: pd.DataFrame) -> str:
     """
     Infer the candidate position type based on the presence of certain columns.
@@ -153,6 +245,7 @@ def get_position_type_from_columns(df: pd.DataFrame) -> str:
 def extract_candidate_data_tables_from_pdf(
     pdf_path: str,
     config: Dict[str, str],
+    polling_stations: List[Dict[str, str]],
 ) -> List[Dict[str, str]]:
     """
     Extract and clean tables from a PDF into structured JSON.
@@ -163,6 +256,7 @@ def extract_candidate_data_tables_from_pdf(
     Returns:
         List of cleaned candidate data dictionaries.
     """
+    load_polling_index(polling_stations)
     pages = config["pages"]
     print(f"Extracting tables from PDF (pages {pages})…")
     tables = camelot.read_pdf(pdf_path, pages=pages)
@@ -174,4 +268,4 @@ def extract_candidate_data_tables_from_pdf(
         candidate_record = [build_candidate_record(row, position) for _, row in df.iterrows()]
         cleaned_output.extend(candidate_record)
 
-    return cleaned_output
+    return cleaned_output 

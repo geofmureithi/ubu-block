@@ -30,12 +30,16 @@ def load_and_normalize_table(df: pd.DataFrame) -> pd.DataFrame:
         "County \nCode": "county_code",
         "County \nName": "county_name",
         "Const\n. \nCode": "constituency_code",
+        "Const \nCode": "constituency_code",
         "Const.  \nName": "constituency_name",
         "CAW \nCode": "ward_code",
+        "Caw \nCode": "ward_code",
         "CAW Name": "ward_name",
         "Reg. \nCentre \nCode": "reg_centre_code",
         "Registration \nCentre Name": "station_name",
+        "Reg. Centre Name": "station_name",
         "Polling Station \nCode": "polling_station_code",
+        "Polling \nStation Code": "polling_station_code",
         "Polling Station Name": "polling_station_name",
         "Reg. \nVoters": "registered_voters",
     }
@@ -68,6 +72,11 @@ def clean_row(row: pd.Series) -> Dict[str, str]:
             row["polling_station_code"] = num
             row["polling_station_name"] = text
 
+        num, text = extract_number_and_text(str(row.get("station_name", "")))
+        if num:
+            row["polling_station_code"] = num
+            row["station_name"] = text
+
     # Fix cases where constituency_code is blank and county_name contains mixed text
     val = row.get("constituency_code")
     if pd.isna(val) or str(val).lower() == "nan" or val == "":
@@ -75,6 +84,14 @@ def clean_row(row: pd.Series) -> Dict[str, str]:
         if num:
             row["constituency_code"] = num
             row["county_name"] = text
+
+    #Fix cases where the constituency_name is blank and constituency_code contains both text and number
+    val = row.get("constituency_name")
+    if pd.isna(val) or str(val).lower() == "nan" or val == "":
+        num, text = extract_number_and_text(str(row.get("ward_code", "")))
+        if num:
+            row["ward_code"] = num
+            row["constituency_name"] = text
     
     #Fix cases where the registered_voters column is empty but the polling_station_name column contains both ward name and registered voters
     val = row.get("registered_voters")
@@ -83,6 +100,27 @@ def clean_row(row: pd.Series) -> Dict[str, str]:
         if num:
             row["registered_voters"] = num
             row["polling_station_name"] = text
+
+    #Fix cases where the ward_code is blank and the constituency_name contains both text and number
+    val = row.get("ward_code")
+    if pd.isna(val) or str(val).lower() == "nan" or val == "":
+        num, text = extract_number_and_text(str(row.get("constituency_name", "")))
+        if num:
+            row["ward_code"] = num
+            row["constituency_name"] = text
+
+        number, text = extract_number_and_text(str(row.get("ward_name", "")))
+        if number:
+            row["ward_code"] = number
+            row["ward_name"] = text
+
+    #fix cases where the ward_name is blank and the ward_code contains both text and number
+    val = row.get("ward_name")
+    if pd.isna(val) or str(val).lower() == "nan" or val == "":
+        num, text = extract_number_and_text(str(row.get("ward_code", "")))
+        if num:
+            row["ward_code"] = num
+            row["ward_name"] = text
 
     # Final JSON-ready cleaned format
     return {
@@ -93,7 +131,7 @@ def clean_row(row: pd.Series) -> Dict[str, str]:
         "ward_code": str(row.get("ward_code", "")).strip(),
         "ward_name": str(row.get("ward_name", "")).replace("\n", " ").strip(),
         "station_name": str(row.get("station_name", "")).replace("\n", " ").strip(),
-        "polling_station_code": str(row.get("polling_station_code", "")).strip(),
+        "polling_station_code": str(row.get("polling_station_code", "")).replace("\n", "").strip(),
         "polling_station_name": str(row.get("polling_station_name", "")).replace("\n", " ").strip(),
         "registered_voters": str(row.get("registered_voters", "")).strip(),
     }

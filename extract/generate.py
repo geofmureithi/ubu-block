@@ -1,7 +1,6 @@
 import json
 import argparse
-from typing import Dict, Literal
-import pandas as pd
+from typing import Dict, Literal, Optional
 from services.polling_data_extractor import extract_polling_data_tables_from_pdf
 from services.candidate_data_extractor import extract_candidate_data_tables_from_pdf
 
@@ -18,6 +17,7 @@ def extract_tables_from_pdf(
     pdf_path: str,
     extraction_type: Literal["polling_station_data", "candidate_data"],
     output_path: str,
+    polling_stations_json: Optional[str] = None,
 ) -> None:
     """
     Extract and clean tables from a PDF into structured JSON.
@@ -39,10 +39,20 @@ def extract_tables_from_pdf(
             json.dump(cleaned_output, f, ensure_ascii=False, indent=4)
         print(f"Polling Data Extraction complete. Saved {len(cleaned_output)} records → {output_path}")
     elif extraction_type == "candidate_data":
-        cleaned_output = extract_candidate_data_tables_from_pdf(
-            pdf_path=pdf_path,
-            config=CONFIG[extraction_type],
-        )
+        if polling_stations_json is None:
+
+            cleaned_output = extract_candidate_data_tables_from_pdf(
+                pdf_path=pdf_path,
+                config=CONFIG[extraction_type],
+            )
+        else:
+            with open(polling_stations_json, "r", encoding="utf-8") as f:
+                polling_stations = json.load(f)
+            cleaned_output = extract_candidate_data_tables_from_pdf(
+                pdf_path=pdf_path,
+                config=CONFIG[extraction_type],
+                polling_stations=polling_stations,
+            )
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(cleaned_output, f, ensure_ascii=False, indent=4)
         print(f"Candidate Data Extraction complete. Saved {len(cleaned_output)} records → {output_path}")
@@ -72,11 +82,18 @@ if __name__ == "__main__":
         required=True,
         help="Path to save the extracted JSON data.",
     )
+    parser.add_argument(
+        "--polling_stations_json",
+        type=str,
+        required=False,
+        help="Path to polling stations JSON file (required for candidate data extraction).",
+    )
     args = parser.parse_args()
 
     extract_tables_from_pdf(
         pdf_path=args.pdf_path,
         extraction_type=args.extraction_type,
         output_path=args.output_path,
+        polling_stations_json=args.polling_stations_json,
     )
 
