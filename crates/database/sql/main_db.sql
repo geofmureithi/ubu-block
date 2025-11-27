@@ -119,6 +119,40 @@ CREATE TABLE "results" (
     FOREIGN KEY ("block_height") REFERENCES "blockchain" ("height")
 );
 
+-- Prevent exceeding registered voters in a station
+CREATE TRIGGER limit_votes_per_station
+BEFORE INSERT ON results
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN (NEW.votes + IFNULL((SELECT SUM(votes) 
+                                      FROM results 
+                                      WHERE station_id = NEW.station_id), 0))
+                 > (SELECT registered_voters 
+                    FROM stations 
+                    WHERE id = NEW.station_id)
+            THEN RAISE(ABORT, 'Vote count exceeds registered voters for this station')
+        END;
+END;
+
+-- Optional: also prevent updates that would exceed the limit
+CREATE TRIGGER limit_votes_update
+BEFORE UPDATE OF votes ON results
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN (NEW.votes + IFNULL((SELECT SUM(votes) 
+                                      FROM results 
+                                      WHERE station_id = NEW.station_id AND id != OLD.id), 0))
+                 > (SELECT registered_voters 
+                    FROM stations 
+                    WHERE id = NEW.station_id)
+            THEN RAISE(ABORT, 'Vote count exceeds registered voters for this station')
+        END;
+END;
+
 CREATE INDEX results_station_id ON results(station_id);
 
 CREATE INDEX results_candidate_id ON results(candidate_id);
