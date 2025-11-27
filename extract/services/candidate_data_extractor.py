@@ -2,7 +2,7 @@ import re
 import camelot
 import pandas as pd
 from typing import Dict,List
-from services.shared_utils import extract_number_and_text
+from services.shared_utils import extract_number_and_text, is_subtotal_row, fix_inline_spaces
 
 # Global polling station index (loaded once)
 POLLING_INDEX = {
@@ -88,22 +88,6 @@ def pick_canonical_station(candidate):
 
     # return first station dict or None
     return stations[0] if stations else None
-
-
-def fix_inline_spaces(text: str) -> str:
-    if not isinstance(text, str):
-        return text
-
-    # 1. Collapse multiple spaces into single space
-    text = re.sub(r'\s+', ' ', text)
-
-    # 2. Fix cases where a single letter gets split from a word (KENY A → KENYA)
-    text = re.sub(r'(\w)\s+(\w)$', r'\1\2', text)
-
-    # 3. Remove stray spaces around hyphens (FORD- KENY A → FORD-KENYA)
-    text = re.sub(r'\s*-\s*', '-', text)
-
-    return text.strip()
 
 def safe_get(row, keys, default=""):
     """
@@ -231,10 +215,10 @@ def get_position_type_from_columns(df: pd.DataFrame) -> str:
     """
     # Infer position type based on presence of certain columns
     if any("ward" in col for col in df.columns):
-        position_type = "Member of County Assembly"
+        position_type = "Mca"
 
     elif any("constituency" in col for col in df.columns):
-        position_type = "Member of Parliament"
+        position_type = "Mp"
 
     elif any("county" in col for col in df.columns):
         position_type = "Senator"
@@ -263,9 +247,12 @@ def extract_candidate_data_tables_from_pdf(
     cleaned_output: List[Dict[str, str]] = []
     for table in tables:
         df = load_and_normalize_table(table.df)
-        print(df.columns)
         position = get_position_type_from_columns(df)
-        candidate_record = [build_candidate_record(row, position) for _, row in df.iterrows()]
+        candidate_record = [
+            build_candidate_record(row, position)
+            for _, row in df.iterrows()
+            if not is_subtotal_row(row)  # skip totals if they exist
+        ]
         cleaned_output.extend(candidate_record)
 
     return cleaned_output 
