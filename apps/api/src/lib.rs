@@ -14,13 +14,6 @@ async fn submit_result(mut blockchain: Extension<BlockChain>, result: Json<Block
     format!("Block with index {} submitted successfully!", block)
 }
 
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct CandidateResult {
-//     candidate_id: u32,
-//     party_id: u32,
-//     vote_count: u32,
-// }
-
 async fn submit_raw_result(
     mut blockchain: Extension<BlockChain>,
     results: Json<Vec<CandidateResult>>,
