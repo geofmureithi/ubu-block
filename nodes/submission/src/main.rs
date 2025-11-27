@@ -1,10 +1,11 @@
+use api::ui_handler;
 use clap::Parser;
 use std::path::PathBuf;
 
 use axum::{Extension, Router};
 use blockchain::BlockChain;
 use database::{Database, SqlitePool};
-use types::{Block, CandidateResult, config::Config, p2p::P2PConfig};
+use types::config::Config;
 
 // cargo run --peers=1,2,3
 
@@ -54,7 +55,12 @@ async fn main() {
     }
 
     let api_routes = api::run_api_server().layer(Extension(blockchain.clone()));
-    let server = axum::serve(listener, Router::new().nest("/api/v1", api_routes));
+    let server = axum::serve(
+        listener,
+        Router::new()
+            .nest("/api/v1", api_routes)
+            .fallback_service(ui_handler()),
+    );
 
     let res = tokio::join!(node, server);
     match res {

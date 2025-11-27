@@ -1,3 +1,4 @@
 /target
 /data
-/apps/web/dist
+# /apps/web/dist
+.DS_Store

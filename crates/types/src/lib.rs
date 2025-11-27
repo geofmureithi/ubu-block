@@ -144,7 +144,7 @@ impl Block {
                 .as_slice()
                 .try_into()
                 .unwrap(),
-            merkle_root: [0u8; 32],
+            merkle_root: root.unwrap_or_default(),
             timestamp: Utc::now().timestamp() as i64,
             block_number: 0,
             validator_signature: sha256_digest(&signer.1),

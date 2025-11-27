@@ -6,10 +6,7 @@ use p256::ecdsa::{Signature, SigningKey, VerifyingKey, signature::Verifier};
 use types::{
     Block, ElectionBlockHeader, PubKey,
     models::{Constituency, County, Party, Station, Ward},
-    results::{
-        Candidate, ConstituencyResult, CountyResult, GeneralResult, LastResultSummary,
-        PositionResult, StationResult, WardResult,
-    },
+    results::{Candidate, GeneralResult, LastResultSummary},
 };
 
 pub const PRIV_SETUP: &str = include_str!("../sql/private_db.sql");
