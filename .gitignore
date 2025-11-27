@@ -1,6 +1,5 @@
 /target
 /data
-/apps/web/dist
 extract/.venv
 extract/services/__pycache__/
 # /apps/web/dist
