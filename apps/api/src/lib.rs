@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use axum::{
     Extension, Json, Router,
     extract::Path,
@@ -5,7 +7,7 @@ use axum::{
     routing::{get, post},
 };
 use blockchain::BlockChain;
-use serde::{Deserialize, Serialize};
+use tower_http::services::{ServeDir, ServeFile};
 use types::{Block, CandidateResult, merkle::MerkleTree};
 
 async fn submit_result(mut blockchain: Extension<BlockChain>, result: Json<Block>) -> String {
@@ -86,7 +88,7 @@ async fn constituencies_by_county(
     Json(constituencies)
 }
 
-async fn constituencies(blockchain: Extension<BlockChain>) -> impl IntoResponse {
+pub async fn constituencies(blockchain: Extension<BlockChain>) -> impl IntoResponse {
     let db = &blockchain.db;
 
     let constituencies = db.constituencies().await.unwrap();
@@ -190,4 +192,22 @@ pub fn run_api_server() -> Router {
         )
         .route("/live", get(live));
     router
+}
+
+fn workspace_dir() -> PathBuf {
+    let output = std::process::Command::new(env!("CARGO"))
+        .arg("locate-project")
+        .arg("--workspace")
+        .arg("--message-format=plain")
+        .output()
+        .unwrap()
+        .stdout;
+    let cargo_path = std::path::Path::new(std::str::from_utf8(&output).unwrap().trim());
+    cargo_path.parent().unwrap().to_path_buf()
+}
+
+pub fn ui_handler() -> ServeDir<tower_http::set_status::SetStatus<ServeFile>> {
+    ServeDir::new(workspace_dir().join("apps/web/dist")).not_found_service(ServeFile::new(
+        workspace_dir().join("apps/web/dist/index.html"),
+    ))
 }
