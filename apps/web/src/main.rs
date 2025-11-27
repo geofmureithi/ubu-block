@@ -30,7 +30,7 @@ impl AppState {
 
 #[component]
 pub fn App() -> impl IntoView {
-    console_error_panic_hook::set_once();
+    // console_error_panic_hook::set_once();
 
     let result_type = RwSignal::new("senate".into());
 
