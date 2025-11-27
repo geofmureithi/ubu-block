@@ -202,11 +202,24 @@ fn workspace_dir() -> Result<PathBuf, std::io::Error> {
         .output()?
         .stdout;
     let cargo_path = std::path::Path::new(std::str::from_utf8(&output).unwrap().trim());
-    Ok(cargo_path.parent()?.to_path_buf())
+    Ok(cargo_path
+        .parent()
+        .ok_or(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "No parent directory",
+        ))?
+        .to_path_buf())
 }
 
 pub fn ui_handler() -> ServeDir<tower_http::set_status::SetStatus<ServeFile>> {
-    ServeDir::new(workspace_dir().unwrap_or(PathBuf::new()).join("apps/web/dist")).not_found_service(ServeFile::new(
-        workspace_dir().unwrap_or(PathBuf::new()).join("apps/web/dist/index.html"),
+    ServeDir::new(
+        workspace_dir()
+            .unwrap_or(PathBuf::new())
+            .join("apps/web/dist"),
+    )
+    .not_found_service(ServeFile::new(
+        workspace_dir()
+            .unwrap_or(PathBuf::new())
+            .join("apps/web/dist/index.html"),
     ))
 }
