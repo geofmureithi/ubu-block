@@ -649,9 +649,10 @@ impl Database {
     ) -> Result<Vec<Candidate>, sqlx::Error> {
         let results = sqlx::query_as::<_, Candidate>(
             r#"
-            SELECT c.*
+            SELECT c.*, p.title AS party_name
             FROM candidates c
             JOIN candidate_areas ca ON ca.candidate_id = c.id
+            JOIN parties p ON c.party_id = p.id
             WHERE ca.area_type = 'station'
               AND ca.station_id = ?
             "#,
@@ -666,9 +667,10 @@ impl Database {
     pub async fn candidates_by_ward(&self, ward_code: &i32) -> Result<Vec<Candidate>, sqlx::Error> {
         let results = sqlx::query_as::<_, Candidate>(
             r#"
-            SELECT c.*
+            SELECT c.*, p.title AS party_name
             FROM candidates c
             JOIN stations st ON c.voting_station = st.id
+            JOIN parties p ON c.party_id = p.id
             WHERE c.position_type = 'Mca'
               AND st.ward_code = ?
             "#,
@@ -687,11 +689,12 @@ impl Database {
     ) -> Result<Vec<Candidate>, sqlx::Error> {
         let results = sqlx::query_as::<_, Candidate>(
             r#"
-            SELECT c.*
+            SELECT c.*, p.title AS party_name
             FROM candidates c
             INNER JOIN stations st ON c.voting_station = st.id
             INNER JOIN wards w ON w.ward_code = st.ward_code
             INNER JOIN constituencies cts ON cts.constituency_code = w.constituency_code
+            JOIN parties p ON c.party_id = p.id
             WHERE c.position_type = ?
               AND cts.constituency_code = ?
             "#,
@@ -711,12 +714,13 @@ impl Database {
     ) -> Result<Vec<Candidate>, sqlx::Error> {
         let results = sqlx::query_as::<_, Candidate>(
             r#"
-            SELECT c.*
+            SELECT c.*, p.title AS party_name
             FROM candidates c
             INNER JOIN stations st ON c.voting_station = st.id
             INNER JOIN wards w ON w.ward_code = st.ward_code
             INNER JOIN constituencies cts ON cts.constituency_code = ward.constituency_code
             INNER JOIN counties ct ON ct.county_code = cts.county_code
+            JOIN parties p ON c.party_id = p.id
             WHERE c.position_type = ?
               AND cts.constituency_code = ?
             "#,
@@ -732,7 +736,8 @@ impl Database {
     pub async fn candidates_national(&self) -> Result<Vec<Candidate>, sqlx::Error> {
         let results = sqlx::query_as::<_, Candidate>(
             r#"
-            SELECT c.*
+            SELECT c.*, p.title AS party_name
+            JOIN parties p ON c.party_id = p.id
             FROM candidates c
             WHERE c.position_type = 'President'
             "#,

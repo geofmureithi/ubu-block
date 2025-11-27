@@ -9,3 +9,4 @@ leptos = { version = "0.8.12", features = ["csr"] }
 leptos_meta = "0.8.5"
 leptos_router = "0.8.9"
 types = { path = "../../crates/types" }
+console_error_panic_hook = "0.1.7"

@@ -1,4 +1,4 @@
-use leptos::{logging::log, prelude::*};
+use leptos::{prelude::*};
 use leptos_meta::*;
 use leptos_router::components::{Outlet, ParentRoute, Route, Router, Routes};
 
@@ -30,7 +30,7 @@ impl AppState {
 
 #[component]
 pub fn App() -> impl IntoView {
-    log!("Hello Log! (from App component)");
+    console_error_panic_hook::set_once();
 
     let result_type = RwSignal::new("senate".into());
 
