@@ -3,7 +3,7 @@ import re
 import camelot
 import pandas as pd
 from typing import Dict,List, Literal, Tuple, Optional
-from services.shared_utils import extract_number_and_text
+from services.shared_utils import extract_number_and_text, is_subtotal_row, fix_inline_spaces
 
 def load_and_normalize_table(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -54,7 +54,6 @@ def clean_row(row: pd.Series) -> Dict[str, str]:
     Clean and normalize a single row of extracted PDF polling-station data.
     Handles missing station names, missing codes, and text-number parsing cleanup.
     """
-
     row = row.copy()
 
     # Fix cases where polling_station_name is missing but code contains both
@@ -71,11 +70,11 @@ def clean_row(row: pd.Series) -> Dict[str, str]:
         if num:
             row["polling_station_code"] = num
             row["polling_station_name"] = text
-
-        num, text = extract_number_and_text(str(row.get("station_name", "")))
-        if num:
-            row["polling_station_code"] = num
-            row["station_name"] = text
+        else:
+            num, text = extract_number_and_text(str(row.get("station_name", "")))
+            if num:
+                row["polling_station_code"] = num
+                row["station_name"] = text
 
     # Fix cases where constituency_code is blank and county_name contains mixed text
     val = row.get("constituency_code")
@@ -108,12 +107,12 @@ def clean_row(row: pd.Series) -> Dict[str, str]:
         if num:
             row["ward_code"] = num
             row["constituency_name"] = text
-
-        number, text = extract_number_and_text(str(row.get("ward_name", "")))
-        if number:
-            row["ward_code"] = number
-            row["ward_name"] = text
-
+        else:
+            number, text = extract_number_and_text(str(row.get("ward_name", "")))
+            if number:
+                row["ward_code"] = number
+                row["ward_name"] = text
+                
     #fix cases where the ward_name is blank and the ward_code contains both text and number
     val = row.get("ward_name")
     if pd.isna(val) or str(val).lower() == "nan" or val == "":
@@ -125,14 +124,14 @@ def clean_row(row: pd.Series) -> Dict[str, str]:
     # Final JSON-ready cleaned format
     return {
         "county_code": str(row.get("county_code", "")).strip(),
-        "county_name": str(row.get("county_name", "")).replace("\n", " ").strip(),
+        "county_name": fix_inline_spaces(str(row.get("county_name", "")).replace("\n", " ").strip()),
         "constituency_code": str(row.get("constituency_code", "")).strip(),
-        "constituency_name": str(row.get("constituency_name", "")).replace("\n", " ").strip(),
+        "constituency_name": fix_inline_spaces(str(row.get("constituency_name", "")).replace("\n", " ").strip()),
         "ward_code": str(row.get("ward_code", "")).strip(),
-        "ward_name": str(row.get("ward_name", "")).replace("\n", " ").strip(),
-        "station_name": str(row.get("station_name", "")).replace("\n", " ").strip(),
+        "ward_name": fix_inline_spaces(str(row.get("ward_name", "")).replace("\n", " ").strip()),
+        "station_name": fix_inline_spaces(str(row.get("station_name", "")).replace("\n", " ").strip()),
         "polling_station_code": str(row.get("polling_station_code", "")).replace("\n", "").strip(),
-        "polling_station_name": str(row.get("polling_station_name", "")).replace("\n", " ").strip(),
+        "polling_station_name": fix_inline_spaces(str(row.get("polling_station_name", "")).replace("\n", " ").strip()),
         "registered_voters": str(row.get("registered_voters", "")).strip(),
     }
 def extract_polling_data_tables_from_pdf(
@@ -163,7 +162,10 @@ def extract_polling_data_tables_from_pdf(
     # Combine all extracted tables
     combined = pd.concat(normalized_frames, ignore_index=True)
 
-    # Clean rows one by one
-    cleaned_output = [clean_row(row) for _, row in combined.iterrows()]
+    # Clean rows and ignore subtotal/total rows
+    cleaned_output = [
+        clean_row(row) for _, row in combined.iterrows()
+        if not is_subtotal_row(row)  # skip subtotal/total rows
+    ]
 
     return cleaned_output
