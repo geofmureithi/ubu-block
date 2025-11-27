@@ -171,7 +171,7 @@ sql_lines.append(",\n".join(
 ) + ";")
 
 # Write SQL file
-with open("init.sql", "w", encoding="utf-8") as f:
+with open("../apps/cli/full_init.sql", "w", encoding="utf-8") as f:
     f.write("\n".join(sql_lines))
 
-print("init.sql generated successfully.")
+print("full_init.sql generated successfully.")
