@@ -194,20 +194,19 @@ pub fn run_api_server() -> Router {
     router
 }
 
-fn workspace_dir() -> PathBuf {
+fn workspace_dir() -> Result<PathBuf, std::io::Error> {
     let output = std::process::Command::new(env!("CARGO"))
         .arg("locate-project")
         .arg("--workspace")
         .arg("--message-format=plain")
-        .output()
-        .unwrap()
+        .output()?
         .stdout;
     let cargo_path = std::path::Path::new(std::str::from_utf8(&output).unwrap().trim());
-    cargo_path.parent().unwrap().to_path_buf()
+    Ok(cargo_path.parent()?.to_path_buf())
 }
 
 pub fn ui_handler() -> ServeDir<tower_http::set_status::SetStatus<ServeFile>> {
-    ServeDir::new(workspace_dir().join("apps/web/dist")).not_found_service(ServeFile::new(
-        workspace_dir().join("apps/web/dist/index.html"),
+    ServeDir::new(workspace_dir().unwrap_or(PathBuf::new()).join("apps/web/dist")).not_found_service(ServeFile::new(
+        workspace_dir().unwrap_or(PathBuf::new()).join("apps/web/dist/index.html"),
     ))
 }
