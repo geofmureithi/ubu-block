@@ -107,6 +107,12 @@ def build_candidate_record(row, position_type):
             ward_code = num
             ward_name = text
 
+    if pd.isna(ward_code) or str(ward_code).lower() == "nan" or ward_code == "":
+        num, text = extract_number_and_text(str(row.get("ward_name", "")))
+        if num:
+            ward_code = num
+            ward_name = text
+
     return {
         "name": full_name,
         "gender": "unknown",              # not provided in PDF
