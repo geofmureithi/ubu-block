@@ -1,2 +1,1 @@
-
-web: ./target/release/submission --config ./nodes/submission/config1.toml
+web: ./target/release/submission --config /app/data/config.toml

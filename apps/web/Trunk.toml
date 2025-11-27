@@ -1,3 +1,6 @@
 [[proxy]]
 rewrite = "/api/v1"
 backend = "http://127.0.0.1:9091/api/v1"
+
+[tools]
+tailwindcss = "3.4.4"
